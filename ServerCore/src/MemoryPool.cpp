@@ -114,7 +114,7 @@ namespace ServerCore
 #ifdef _WIN32
 					::_aligned_free(memory);
 #else // POSIX
-					free(ptr);
+					free(memory);
 #endif
 				}
 			}
@@ -169,7 +169,7 @@ namespace ServerCore
 #ifdef _WIN32
 					::_aligned_free(bucket.blocks[j]);
 #else // POSIX
-					free(ptr);
+					free(bucket.blocks[j]);
 #endif
 
 					bucket.blocks[j] = nullptr;

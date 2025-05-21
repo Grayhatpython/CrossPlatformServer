@@ -1,5 +1,6 @@
 #include "Pch.hpp"  
 
+#if defined(PLATFORM_WINDOWS)
 void HandleError(const char* cause)
 {
     int32 errorCode = ::WSAGetLastError();
@@ -75,5 +76,11 @@ int main()
 
     ::WSACleanup();
 
+    return 0;
+}
+#endif
+
+int main(int argc, char* argv[])
+{
     return 0;
 }

@@ -5,8 +5,10 @@
 #include <chrono>
 #include <cassert>
 
+#if defined(PLATFORM_WINDOWS)
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
+#endif
 
 void TaskTest()
 {
@@ -15,7 +17,7 @@ void TaskTest()
 
 int main()
 {
-#ifdef _WIN32
+#if defined(PLATFORM_WINDOWS)
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 
     // 2. Windows 환경에서 콘솔 출력 인코딩을 UTF-8로 강제
