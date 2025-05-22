@@ -50,15 +50,19 @@ namespace ServerCore
 
 		const auto refillCount = std::min(S_MAX_CACHE_BLOCK_SIZE - bucket.count, count);
 
-		for (auto i = 0; i < refillCount; i++)
-		{
-			void* memory = GMemoryPool->AllocateFromMemoryPool(dataSize);
+		std::vector<void*> memoryBlocks;
+		GMemoryPool->AllocateFromMemoryPool(dataSize, refillCount, memoryBlocks);
 
+		for (auto i = 0; i < memoryBlocks.size(); i++)
+		{
+			void* memory = memoryBlocks[i];
 			if (memory)
 				bucket.blocks[bucket.count++] = memory;
 			else
 				break;
 		}
+
+
 	}
 
 	size_t ThreadLocalCache::GetBucketIndexFromSize(size_t size)
@@ -66,13 +70,13 @@ namespace ServerCore
 		size_t extractionNumber = std::min(std::max(size, static_cast<size_t>(S_MIN_BLOCK_SIZE)), static_cast<size_t>(S_MAX_BLOCK_SIZE));
 
 		if (extractionNumber <= 256)
-			//	32 ~ 256 ������ 32����Ʈ ������ �з�
+			//	32 ~ 256 -> 32
 			return (extractionNumber - 1) / 32;
 		else if (extractionNumber <= 1024)
-			//	256 ~ 1024 ������ 128����Ʈ ������ �з�
+			//	256 ~ 1024 -> 128
 			return 8 + (extractionNumber - 256 - 1) / 128;
 		else
-			//	1024 ~ 4096 ������ 514����Ʈ ������ �з�
+			//	1024 ~ 4096 -> 512
 			return 14 + (extractionNumber - 1024 - 1) / 512;
 	}
 
@@ -143,6 +147,50 @@ namespace ServerCore
 		}
 
 		return AllocateNewMemory(dataSize);
+	}
+
+	void MemoryPool::AllocateFromMemoryPool(size_t dataSize, size_t refillCount, std::vector<void*>& memoryBlocks)
+	{
+		size_t totalSize = dataSize + sizeof(MemoryBlockHeader);
+
+		auto bucketIndex = GetBucketIndexFromThreadLocalCache(totalSize);
+
+		{
+			std::lock_guard<std::mutex> lock(_lock);
+			auto freeListCount = _freeLists[bucketIndex].lists.size();
+
+			//	freeList 비어있는 경우 or freeList 보다 요청한 refillCount가 큰 경우
+			if (freeListCount < refillCount)
+			{
+				//	refillCount 만큼은 freeList에 미리 만들어 놓고 -> 추가 요청을 미리 대비
+				for (size_t i = 0; i < refillCount; i++)
+				{
+					auto newMemoryBlcok = AllocateNewMemory(dataSize);
+					FreeList& freeList = _freeLists[bucketIndex];
+					freeList.lists.push_back(newMemoryBlcok);
+				}
+			}
+			//	freeList가 refillCount 보다 큰 경우
+			else
+			{
+				//	freeList에서 refillCount 만큼 가져온다.
+				for (size_t i = 0; i < refillCount; i++)
+				{
+					FreeList& freeList = _freeLists[bucketIndex];
+					auto memoryBlockHeader = static_cast<MemoryBlockHeader*>(freeList.lists.back());
+					freeList.lists.pop_back();
+					memoryBlocks.push_back(memoryBlockHeader);
+				}
+				return;
+			}
+		}
+
+		//	refillCount 만큼은 threadLocalCache에 추가하기 위해
+		for (size_t i = 0; i < refillCount; i++)
+		{
+			auto newMemoryBlcok = AllocateNewMemory(dataSize);
+			memoryBlocks.push_back(newMemoryBlcok);
+		}
 	}
 
 	void MemoryPool::DeallocateToMemoryPool(void* memory)
@@ -242,4 +290,5 @@ namespace ServerCore
 
 		return memory;
 	}
+
 }

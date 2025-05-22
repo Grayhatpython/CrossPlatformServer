@@ -126,7 +126,10 @@ namespace ServerCore
 			InitializeThreadLocal();
 
 			while (_stopped.load() == false)
+			{
 				callback();
+				break;	//	Test
+			}
 
 			DestroyThreadLocal();
 		}));
@@ -195,7 +198,7 @@ namespace ServerCore
 
 	void ThreadManager::DestroyThreadLocal()
 	{
-
+		GMemoryPool->ThreadLocalCacheClear();
 	}
 
 	void ThreadManager::WorkerThread()

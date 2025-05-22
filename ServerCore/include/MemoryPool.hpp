@@ -86,8 +86,12 @@ namespace ServerCore
 		std::shared_ptr<T> MakeShared(Args&&... args);
 
 	public:
-		void* AllocateFromMemoryPool(size_t dataSize);
-		void DeallocateToMemoryPool(void* memory);
+		void*	AllocateFromMemoryPool(size_t dataSize);
+		void	AllocateFromMemoryPool(size_t dataSize, size_t refillCount, std::vector<void*>& memoryBlocks);
+		void	DeallocateToMemoryPool(void* memory);
+
+	public:
+		void	RefillFreeListBlocks();
 
 	public:
 		static void ThreadLocalCacheClear();
@@ -95,6 +99,7 @@ namespace ServerCore
 	public:
 		static ThreadLocalCache& GetThreadLocalCache();
 		static size_t GetBucketIndexFromThreadLocalCache(size_t size);
+
 
 	private:
 		void*	AllocateInternal(size_t dataSize);

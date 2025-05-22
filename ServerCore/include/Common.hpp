@@ -1,6 +1,6 @@
 #pragma once
 
-#include <iostream> 
+
 
 // _WIN32 , _WIN64 매크로는 MSVC 컴파일러가 Windows용으로 컴파일할 때 자동으로 정의됩니다.
 #if defined(_WIN32) || defined(_WIN64)
@@ -39,13 +39,22 @@
     #include <pthread.h>
 
     // Linux/Unix 소켓 프로그래밍에 필요한 표준 헤더 파일들입니다.
-    #include <sys/socket.h>   // 소켓 관련 기본 함수 (socket, bind, listen, accept, connect 등)
-    #include <netinet/in.h>   // 인터넷 주소 구조체 (sockaddr_in, sockaddr_in6) 및 상수 (IPPROTO_TCP 등)
-    #include <arpa/inet.h>    // IP 주소 변환 함수 (inet_pton, inet_ntop 등)
-    #include <unistd.h>       // POSIX 표준 함수 (close() 등, Windows의 closesocket()에 해당)
-    #include <sys/types.h>    // 다양한 데이터 타입 정의
-    #include <netdb.h>        // 호스트 이름/서비스 해석 함수 (getaddrinfo, freeaddrinfo 등)
+    #include <sys/socket.h>     // 소켓 관련 기본 함수 (socket, bind, listen, accept, connect 등)
+    #include <netinet/in.h>     // 인터넷 주소 구조체 (sockaddr_in, sockaddr_in6) 및 상수 (IPPROTO_TCP 등)
+    #include <netinet/tcp.h>    // TCP_NODELAY
+    #include <arpa/inet.h>      // IP 주소 변환 함수 (inet_pton, inet_ntop 등)
+    #include <unistd.h>         // POSIX 표준 함수 (close() 등, Windows의 closesocket()에 해당)
+    #include <netdb.h>          // 호스트 이름/서비스 해석 함수 (getaddrinfo, freeaddrinfo 등)
+    #include <fcntl.h>          // Non Blocking
+
+    #include <sys/types.h>      // 다양한 데이터 타입 정의
     #include <sys/syscall.h>
+    #include <cerrno>
+
+    using SOCKET = int;
+    constexpr int INVALID_SOCKET = -1;
+    constexpr int SOCKET_ERROR = -1;
+
 #endif
 
 #include <map>
@@ -65,9 +74,11 @@
 #include <condition_variable>
 
 #include <memory>
+#include <iostream> 
 #include <functional>
 
 #include <cstdlib>
+#include <cassert>
 
 // 타입 정의 헤더 파일 
 #include "Types.hpp"    
@@ -76,3 +87,4 @@
 #include "Global.hpp"
 #include "MemoryPool.hpp"
 #include "ThreadManager.hpp"
+#include "Lock.hpp"

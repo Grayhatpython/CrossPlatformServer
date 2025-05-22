@@ -9,11 +9,11 @@ namespace ServerCore
 		CoreGlobal();
 		~CoreGlobal();
 
-	public:
+	private:
+		void Initialize();
 		void Clear();
 	};
 
-	extern CoreGlobal* GCoreGlobal;
 	extern class MemoryPool* GMemoryPool;
 	extern class ThreadManager* GThreadManager;
 }
