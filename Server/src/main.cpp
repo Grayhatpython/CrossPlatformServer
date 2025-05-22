@@ -75,7 +75,7 @@ int main()
         std::cout << "시간 : " << duration.count() << " ms" << std::endl;
 
             */
-        SOCKET socket = ServerCore::NetworkUtils::CreateSocket();
+        SOCKET socket = ServerCore::NetworkUtils::CreateSocket(false);
 
         ServerCore::NetworkUtils::Bind(socket, 8888);
         ServerCore::NetworkUtils::Listen(socket);
