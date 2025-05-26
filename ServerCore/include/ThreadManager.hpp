@@ -68,7 +68,7 @@ namespace ServerCore
 		~ThreadManager();
 
 	public:
-		void Launch(std::function<void(void)> callback, const std::string& threadName = "");
+		void Launch(std::function<void(void)> callback, const std::string& threadName = "", bool repeat = true);
 		void Join();
 		void Close();
 
@@ -76,7 +76,7 @@ namespace ServerCore
 		void InitializeThreadPool(int32 threadCount = 0);
 		void ShutdownThreadPool();
 
-		//	Submit
+		//	Push Task No return Value
 		std::shared_ptr<Task> PushTask(std::function<void(void)> func, const std::string& name);
 
 	public:

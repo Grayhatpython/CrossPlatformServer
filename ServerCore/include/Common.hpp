@@ -82,6 +82,7 @@
 
 // 타입 정의 헤더 파일 
 #include "Types.hpp"    
+#include "Enums.hpp"
 #include "ThreadLocal.hpp"
 
 #include "Global.hpp"

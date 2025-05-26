@@ -114,21 +114,26 @@ namespace ServerCore
 		ShutdownThreadPool();
 	}
 
-	void ThreadManager::Launch(std::function<void(void)> callback, const std::string& threadName)
+	void ThreadManager::Launch(std::function<void(void)> callback, const std::string& threadName,  bool repeat)
 	{
 		if (_stopped.load() == true)
 			return;
 
 		std::lock_guard<std::mutex> lock(_lock);
 
-		_threads.push_back(std::thread([this, callback, threadName]() {
+		_threads.push_back(std::thread([this, callback, threadName, repeat]() {
 			
 			InitializeThreadLocal();
 
-			while (_stopped.load() == false)
+			if (repeat)
 			{
-				callback();
-				break;	//	Test
+				while (_stopped.load() == false)
+					callback();
+			}
+			else
+			{
+				if(_stopped.load() ==false)
+					callback();
 			}
 
 			DestroyThreadLocal();

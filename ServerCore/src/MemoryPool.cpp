@@ -31,7 +31,7 @@ namespace ServerCore
 
 	bool ThreadLocalCache::Deallocate(MemoryBlockHeader* memoryBlockHeader)
 	{
-		const auto bucketIndex = GetBucketIndexFromSize(memoryBlockHeader->dataSize);
+		const auto bucketIndex = GetBucketIndexFromSize(memoryBlockHeader->allocSize);
 		auto& bucket = _buckets[bucketIndex];
 
 		if (bucket.count < S_MAX_CACHE_BLOCK_SIZE)
@@ -83,13 +83,13 @@ namespace ServerCore
 	size_t ThreadLocalCache::GetSizeFromBucketIndex(size_t index)
 	{
 		if (index < 8)
-			// 32~256 ����
+			// 32 ~ 256 바이트 크기 (32바이트 단위)
 			return (index + 1) * 32;
 		else if (index < 14)
-			// 256~1024 ����
+			 // 257 ~ 1024 바이트 크기 (128바이트 단위)
 			return 256 + (index - 7) * 128;
 		else
-			// 1024~4096 ����
+			// 1025 ~ 4096 바이트 크기 (512바이트 단위)
 			return 1024 + (index - 13) * 512;
 	}
 
@@ -107,23 +107,26 @@ namespace ServerCore
 
 	void MemoryPool::Clear()
 	{
-		std::lock_guard<std::mutex> lock(_lock);
-
-		for (auto& freeList : _freeLists)
+		for (auto& lock : _locks)
 		{
-			for (auto memory : freeList.lists)
-			{
-				if (memory)
-				{
-#ifdef _WIN32
-					::_aligned_free(memory);
-#else // POSIX
-					free(memory);
-#endif
-				}
-			}
+			std::lock_guard<std::mutex> lockGuard(lock);
 
-			freeList.lists.clear();
+			for (auto& freeList : _freeLists)
+			{
+				for (auto memory : freeList.lists)
+				{
+					if (memory)
+					{
+#ifdef _WIN32
+						::_aligned_free(memory);
+#else // POSIX
+						free(memory);
+#endif
+					}
+				}
+
+				freeList.lists.clear();
+			}
 		}
 	}
 
@@ -134,7 +137,7 @@ namespace ServerCore
 		auto bucketIndex = GetBucketIndexFromThreadLocalCache(totalSize);
 
 		{
-			std::lock_guard<std::mutex> lock(_lock);
+			std::lock_guard<std::mutex> lock(_locks[bucketIndex]);
 
 			FreeList& freeList = _freeLists[bucketIndex];
 
@@ -152,53 +155,58 @@ namespace ServerCore
 	void MemoryPool::AllocateFromMemoryPool(size_t dataSize, size_t refillCount, std::vector<void*>& memoryBlocks)
 	{
 		size_t totalSize = dataSize + sizeof(MemoryBlockHeader);
-
 		auto bucketIndex = GetBucketIndexFromThreadLocalCache(totalSize);
+		memoryBlocks.reserve(refillCount);
 
 		{
-			std::lock_guard<std::mutex> lock(_lock);
-			auto freeListCount = _freeLists[bucketIndex].lists.size();
+			std::lock_guard<std::mutex> lock(_locks[bucketIndex]);
+			FreeList& freeList = _freeLists[bucketIndex];
+			size_t currentFreeListBucketCount = freeList.lists.size();
 
-			//	freeList 비어있는 경우 or freeList 보다 요청한 refillCount가 큰 경우
-			if (freeListCount < refillCount)
+			//	Freelist에 요청한 만큼 충분한 블록이 있는 경우
+			if (currentFreeListBucketCount >= refillCount)
 			{
-				//	refillCount 만큼은 freeList에 미리 만들어 놓고 -> 추가 요청을 미리 대비
-				for (size_t i = 0; i < refillCount; i++)
+				//	Freelist에서 refillCount 만큼 가져와서 memoryBlocks에 채운다.
+				for (auto i = 0; i < refillCount; i++)
 				{
-					auto newMemoryBlcok = AllocateNewMemory(dataSize);
-					FreeList& freeList = _freeLists[bucketIndex];
-					freeList.lists.push_back(newMemoryBlcok);
+					memoryBlocks.push_back(freeList.lists.back());
+					freeList.lists.pop_back();
 				}
+
+				return;
 			}
-			//	freeList가 refillCount 보다 큰 경우
+			//	Freelist의 블록 수가 요청한 refillCount보다 적은 경우
 			else
 			{
-				//	freeList에서 refillCount 만큼 가져온다.
-				for (size_t i = 0; i < refillCount; i++)
+				//	남아 있는 일부라도 먼저 memoryBlocks에 채운다.
+				for (auto i = 0; i < currentFreeListBucketCount; i++)
 				{
-					FreeList& freeList = _freeLists[bucketIndex];
-					auto memoryBlockHeader = static_cast<MemoryBlockHeader*>(freeList.lists.back());
+					memoryBlocks.push_back(freeList.lists.back());
 					freeList.lists.pop_back();
-					memoryBlocks.push_back(memoryBlockHeader);
 				}
-				return;
 			}
 		}
 
-		//	refillCount 만큼은 threadLocalCache에 추가하기 위해
-		for (size_t i = 0; i < refillCount; i++)
+		//	필요로 하는 MermoyBlocksCount 만큼 새로 메모리를 생성해서 memoryBlocks에 채운다
+		size_t neededMemoryBlocksCount = refillCount;
+		if (memoryBlocks.empty() == false)
+			neededMemoryBlocksCount = refillCount - memoryBlocks.size();
+
+		for (auto i = 0; i < neededMemoryBlocksCount; i++)
 		{
-			auto newMemoryBlcok = AllocateNewMemory(dataSize);
-			memoryBlocks.push_back(newMemoryBlcok);
+			auto* newMemoryBlock = AllocateNewMemory(dataSize);
+			if (newMemoryBlock == nullptr)
+				continue;	//	TODO
+			memoryBlocks.push_back(newMemoryBlock);
 		}
 	}
 
 	void MemoryPool::DeallocateToMemoryPool(void* memory)
 	{
 		auto memoryBlockHeader = static_cast<MemoryBlockHeader*>(memory);
-		auto bucketIndex = GetBucketIndexFromThreadLocalCache(memoryBlockHeader->dataSize);
+		auto bucketIndex = GetBucketIndexFromThreadLocalCache(memoryBlockHeader->allocSize);
 
-		std::lock_guard<std::mutex> lock(_lock);
+		std::lock_guard<std::mutex> lock(_locks[bucketIndex]);
 
 		FreeList& freeList = _freeLists[bucketIndex];
 		freeList.lists.push_back(memoryBlockHeader);

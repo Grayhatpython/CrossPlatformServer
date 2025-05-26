@@ -91,9 +91,6 @@ namespace ServerCore
 		void	DeallocateToMemoryPool(void* memory);
 
 	public:
-		void	RefillFreeListBlocks();
-
-	public:
 		static void ThreadLocalCacheClear();
 
 	public:
@@ -107,8 +104,8 @@ namespace ServerCore
 		void*	AllocateNewMemory(size_t dataSize);
 
 	private:
-		std::array<FreeList, S_MAX_FREELIST_COUNT>	_freeLists;
-		std::mutex									_lock;
+		std::array<FreeList, S_MAX_FREELIST_COUNT>		_freeLists;
+		std::array<std::mutex, S_MAX_FREELIST_COUNT>	_locks;
 	};
 
 	template<typename T, typename ...Args>

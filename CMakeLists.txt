@@ -37,6 +37,8 @@ find_package(OpenGL REQUIRED)
 if (MSVC)
     # 모든 C++ 컴파일에 /utf-8 플래그를 추가합니다.
     add_compile_options(/utf-8)
+    
+    add_compile_definitions(UNICODE _UNICODE)
 endif()
 
 # 'ServerCore' 하위 디렉토리에 있는 CMakeLists.txt 파일을 포함시키고 처리
