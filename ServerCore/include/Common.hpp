@@ -74,9 +74,11 @@
 #include <condition_variable>
 
 #include <memory>
+#include <string>
 #include <iostream> 
 #include <functional>
 
+#include <cstring>
 #include <cstdlib>
 #include <cassert>
 

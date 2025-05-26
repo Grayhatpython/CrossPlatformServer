@@ -10,7 +10,7 @@ namespace ServerCore
 		NetworkAddress(const std::string& ip, uint16 port);
 
 	public:
-		struct sockaddr_in		GetSocketAddress() const { return _address; }
+		struct sockaddr_in&		GetSocketAddress() { return _address; }
 		std::string				GetIpStringAddress();
 		uint16					GetPort() const { return ::ntohs(_address.sin_port); }
 

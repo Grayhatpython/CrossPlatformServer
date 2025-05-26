@@ -75,7 +75,7 @@ namespace ServerCore
 
 	bool NetworkUtils::Bind(SOCKET socket, NetworkAddress networkAddress)
 	{
-		return SOCKET_ERROR != ::bind(socket, reinterpret_cast<const struct sockaddr*>(&networkAddress.GetSocketAddress()), sizeof(SOCKADDR_IN));
+		return SOCKET_ERROR != ::bind(socket, reinterpret_cast<struct sockaddr*>(&networkAddress.GetSocketAddress()), sizeof(struct sockaddr_in));
 	}
 
 	bool NetworkUtils::Bind(SOCKET socket, uint16 port)

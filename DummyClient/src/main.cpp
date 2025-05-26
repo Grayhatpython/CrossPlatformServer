@@ -1,4 +1,5 @@
 #include "Pch.hpp"  
+#include "NetworkUtils.hpp"
 
 #if defined(PLATFORM_WINDOWS)
 void HandleError(const char* cause)
@@ -78,9 +79,46 @@ int main()
 
     return 0;
 }
-#elif
+#else
 int main(int argc, char* argv[])
 {
+    SOCKET socket = INVALID_SOCKET;
+    ServerCore::NetworkAddress serverAddress("127.0.0.1", 8888);
+    std::string message = "Hello World";
+
+    socket = ServerCore::NetworkUtils::CreateSocket(false);
+    ::connect(socket, (struct sockaddr*)&serverAddress.GetSocketAddress(), sizeof(struct sockaddr_in));
+
+    std::cout << "Server Connected!" << std::endl;
+
+    bool connected = true;
+    while(connected)
+    {
+        int32 bytesSent = ::send(socket, message.c_str(), message.length(), 0);
+
+        if(bytesSent < 0)
+        {
+            connected = false;
+        }
+        else if(bytesSent == 0)
+            connected = false;
+        else if(static_cast<size_t>(bytesSent) < message.length()) 
+            std::cout << "메세지 일부만 전송?" << bytesSent << "/" << message.length() << " bytes" << std::endl;
+        else
+            std::cout << "[" << std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) << "] " << " : " << message << " 패킷 전송 완료 (" << bytesSent << ")" << std::endl;
+
+        if(connected == false)
+            break;
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+
+    if(socket != INVALID_SOCKET)
+    {
+        ServerCore::NetworkUtils::CloseSocket(socket);
+        std::cout << "연결 종료!" << std::endl;
+    }
+ 
     return 0;
 }
 #endif
