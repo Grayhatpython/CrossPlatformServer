@@ -1,7 +1,7 @@
 #include "Pch.hpp"
 #include "NetworkUtils.hpp"
 
-namespace ServerCore
+namespace servercore
 {
 
 #if defined(PLATFORM_WINDOWS)

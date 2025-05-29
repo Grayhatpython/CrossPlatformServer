@@ -4,9 +4,8 @@
 #include "ThreadManager.hpp"
 #include "NetworkUtils.hpp"
 
-namespace ServerCore
+namespace servercore
 {
-
 	MemoryPool* GMemoryPool = nullptr;
 	ThreadManager* GThreadManager = nullptr;
 
@@ -22,8 +21,6 @@ namespace ServerCore
 
 	void CoreGlobal::Initialize()
 	{
-		NetworkUtils::Initialize();
-
 		GMemoryPool = new MemoryPool();
 		GThreadManager = new ThreadManager();
 	}
@@ -44,9 +41,5 @@ namespace ServerCore
 			delete GMemoryPool;
 			GMemoryPool = nullptr;
 		}
-
-		std::this_thread::sleep_for(std::chrono::seconds(2));
-
-		NetworkUtils::Clear();
 	}
 }

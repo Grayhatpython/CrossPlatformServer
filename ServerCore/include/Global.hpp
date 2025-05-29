@@ -1,7 +1,7 @@
 #pragma once
 
 
-namespace ServerCore
+namespace servercore
 {
 	class CoreGlobal
 	{

@@ -2,7 +2,7 @@
 
 #include "NetworkAddress.hpp"
 
-namespace ServerCore
+namespace servercore
 {
 	class NetworkUtils
 	{

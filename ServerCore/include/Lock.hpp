@@ -10,7 +10,7 @@
 #define PAUSE() std::this_thread::yield()
 #endif
 
-namespace ServerCore
+namespace servercore
 {
 	class Lock
 	{

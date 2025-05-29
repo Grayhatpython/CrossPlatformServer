@@ -1,6 +1,6 @@
 #pragma once
 
-namespace ServerCore 
+namespace servercore
 {
 	#define MEMORY_ALIGN_SIZE 16
 

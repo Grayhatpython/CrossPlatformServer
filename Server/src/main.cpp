@@ -33,6 +33,7 @@ public:
 };
 
 
+#include "ServerCore.hpp"
 
 int main()
 {
@@ -43,11 +44,22 @@ int main()
     // 콘솔 출력 코드 페이지를 UTF-8 (65001)로 설정
     ::SetConsoleOutputCP(CP_UTF8);
 
-    //::_CrtSetBreakAlloc(413);
+    //::_CrtSetBreakAlloc(574);
 #endif
 
     {
-        std::unique_ptr<ServerCore::CoreGlobal> serverCore = std::make_unique<ServerCore::CoreGlobal>();
+        std::unique_ptr<servercore::ServerCore> serverCore = std::make_unique<servercore::ServerCore>(8888, 1);
+        serverCore->Start();
+
+        char input;
+
+        while (true)
+        {
+            std::cin >> input;
+
+            if (input == 'q' || input == 'Q')
+                break;
+        }
 
         /*
         auto start = std::chrono::high_resolution_clock::now();
@@ -57,13 +69,13 @@ int main()
             ServerCore::GThreadManager->Launch([]() {
                 for (int i = 0; i < 100000; i++)
                 {
-                    auto k1 = ServerCore::cnew<Knight>();
-                    ServerCore::cdelete(k1);
+                    //auto k1 = ServerCore::cnew<Knight>();
+                    //ServerCore::cdelete(k1);
 
-                    //auto k1 = new Knight();
-                    //delete k1;
+                    auto k1 = new Knight();
+                    delete k1;
                 }
-                });
+                },"TestThread", false);
         }
         
         ServerCore::GThreadManager->Join();
@@ -73,22 +85,8 @@ int main()
         std::chrono::duration<double, std::milli> duration = end - start;
 
         std::cout << "시간 : " << duration.count() << " ms" << std::endl;
-
-            */
-        SOCKET socket = ServerCore::NetworkUtils::CreateSocket(false);
-
-        ServerCore::NetworkUtils::Bind(socket, 8888);
-        ServerCore::NetworkUtils::Listen(socket);
-
-        SOCKET clientSocket = ::accept(socket, nullptr, nullptr);
-
-        std::cout << "client Connected" << std::endl;
-
-        while (true)
-        {
-
-        }
-    
+        */
+           
     }
 
     return 0;

@@ -1,7 +1,7 @@
 #include "Pch.hpp"
 #include "Lock.hpp"
 
-namespace ServerCore
+namespace servercore
 {
 	Lock::Lock()
 	{

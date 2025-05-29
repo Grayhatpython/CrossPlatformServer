@@ -1,7 +1,7 @@
 #include "Pch.hpp"
 #include "MemoryPool.hpp"
 
-namespace ServerCore
+namespace servercore
 {
 	ThreadLocalCache::ThreadLocalCache()
 	{

@@ -1,10 +1,10 @@
 #pragma once
 
-namespace ServerCore
+namespace servercore
 {
 	struct Allocator
 	{
-		static void* Allocate(size_t size);
+		static void*	Allocate(size_t size);
 		static void     Deallocate(void* memory);
 	};
 

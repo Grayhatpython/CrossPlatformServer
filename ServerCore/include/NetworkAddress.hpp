@@ -1,6 +1,6 @@
 #pragma once	
 
-namespace ServerCore
+namespace servercore
 {
 	class NetworkAddress
 	{

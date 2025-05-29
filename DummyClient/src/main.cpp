@@ -1,5 +1,7 @@
 #include "Pch.hpp"  
-#include "NetworkUtils.hpp"
+
+#include "ServerCore.hpp"
+#include "Session.hpp"
 
 #if defined(PLATFORM_WINDOWS)
 void HandleError(const char* cause)
@@ -11,6 +13,21 @@ void HandleError(const char* cause)
 int main()
 {
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    {
+        std::unique_ptr<servercore::ServerCore> serverCore = std::make_unique<servercore::ServerCore>(8888, 1);
+        auto clientSession = serverCore->CreateClientSessionAndConnect(servercore::NetworkAddress("127.0.0.1", 8888));
+        assert(clientSession);
+
+        std::string message = "hello Server";
+
+        while (true)
+        {
+            std::cout << "!" << std::endl;
+            clientSession->Send(reinterpret_cast<const BYTE*>(message.data()), message.length());
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    }
+
     WSADATA wsaData;
     if (::WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
         return 0;

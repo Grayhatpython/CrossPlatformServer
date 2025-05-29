@@ -2,7 +2,7 @@
 #include "Allocator.hpp"
 #include "MemoryPool.hpp"
 
-namespace ServerCore
+namespace servercore
 {
 	void* Allocator::Allocate(size_t size)
 	{

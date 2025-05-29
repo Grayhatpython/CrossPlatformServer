@@ -91,3 +91,10 @@
 #include "MemoryPool.hpp"
 #include "ThreadManager.hpp"
 #include "Lock.hpp"
+
+#include "NetworkUtils.hpp"
+#if defined(PLATFORM_WINDOWS)
+#include "WindowsIocpNetwork.hpp"
+#else
+#include "LinuxEpollNetwork.hpp"
+#endif

@@ -1,7 +1,7 @@
 #include "Pch.hpp"
 #include "ThreadManager.hpp"
 
-namespace ServerCore
+namespace servercore
 {
 	Task::Task(CallbackFunc func, const std::string& name)
 		: _name(name), _func(func)
@@ -137,6 +137,8 @@ namespace ServerCore
 			}
 
 			DestroyThreadLocal();
+
+			std::cout << threadName << " thread [" << LThreadId << "] finished." << std::endl;
 		}));
 	}
 
@@ -218,5 +220,7 @@ namespace ServerCore
 		}
 
 		DestroyThreadLocal();
+
+		std::cout << "Thread Pool thread [" << LThreadId << "] finished." << std::endl;
 	}
 }
