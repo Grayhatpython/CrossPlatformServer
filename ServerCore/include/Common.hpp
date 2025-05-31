@@ -98,3 +98,7 @@
 #else
 #include "LinuxEpollNetwork.hpp"
 #endif
+
+#include "Session.hpp"
+#include "Packet.hpp"
+#include "SendBufferPool.hpp"

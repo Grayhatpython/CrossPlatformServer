@@ -8,12 +8,14 @@ namespace servercore
 
 	class Acceptor : public IocpObject
 	{
+		friend class ServerCore;
+
 	public:
-		Acceptor(std::shared_ptr<IocpCore> iocpCore, ServerCore* serverCore);
+		Acceptor();
 		~Acceptor() override;
 
 	public:
-		bool	Start(NetworkAddress& listenNetworkAddress, int32 concurrentAcceptCount, int32 backlog = SOMAXCONN);
+		bool	Start(uint16 port, int32 backlog = SOMAXCONN);
 		void	Close();
 
 	public:
@@ -24,13 +26,22 @@ namespace servercore
 		void	RegisterAccept();
 		void	ProcessAccept(AcceptEvent* acceptEvent);
 
+	public:
+		void						SetServerCore(std::shared_ptr<ServerCore> serverCore) { _serverCore = serverCore; }
+		std::shared_ptr<ServerCore>	GetServerCore() { return _serverCore; }
+		void						SetIocpCore(std::shared_ptr<IocpCore> iocpCore) { _iocpCore = iocpCore; }
+		std::shared_ptr<IocpCore>	GetIocpCore() { return _iocpCore; }
+
 	private:
-		SOCKET						_listenSocket = INVALID_SOCKET;
+		SOCKET							_listenSocket = INVALID_SOCKET;
 
-		std::shared_ptr<IocpCore>	_iocpCore;
-		ServerCore*					_serverCore = nullptr;
+		std::shared_ptr<IocpCore>		_iocpCore;
+		std::shared_ptr<ServerCore>		_serverCore;
 
-		std::atomic<int32>			_pendingAccepts = 0;
-		std::atomic<bool>			_isClosed = false;
+		std::atomic<int32>				_pendingAccepts = 0;
+		std::atomic<bool>				_isClosed = false;
+
+			//	TODO
+		int32							_concurrentAcceptCount = 50;
 	};
 }

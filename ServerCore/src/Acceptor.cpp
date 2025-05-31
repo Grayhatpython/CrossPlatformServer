@@ -5,11 +5,9 @@
 
 namespace servercore
 {
-	Acceptor::Acceptor(std::shared_ptr<IocpCore> iocpCore, ServerCore* serverCore)
-		: _iocpCore(iocpCore), _serverCore(serverCore)
+	Acceptor::Acceptor()
 	{
-		assert(_iocpCore);
-		assert(_serverCore);
+
 	}
 
 	Acceptor::~Acceptor()
@@ -17,7 +15,7 @@ namespace servercore
 		Close();
 	}
 
-	bool Acceptor::Start(NetworkAddress& listenNetworkAddress, int32 concurrentAcceptCount, int32 backlog)
+	bool Acceptor::Start(uint16 port, int32 backlog)
 	{
 		//	listenSocket이 이미 있는 경우 -> 일단은 실패
 		if (_listenSocket != INVALID_SOCKET)
@@ -49,7 +47,7 @@ namespace servercore
 			return false;
 		}
 
-		if (NetworkUtils::Bind(_listenSocket, listenNetworkAddress) == false)
+		if (NetworkUtils::Bind(_listenSocket, port) == false)
 		{
 			_serverCore->HandleError(__FUNCTION__, __LINE__, "NetworkUtils::Bind() : ", ::WSAGetLastError());
 			NetworkUtils::CloseSocket(_listenSocket);
@@ -63,7 +61,7 @@ namespace servercore
 			return false;
 		}
 
-		for (int32 i = 0; i < concurrentAcceptCount; i++)
+		for (int32 i = 0; i < _concurrentAcceptCount; i++)
 			RegisterAccept();
 
 		return true;
@@ -85,7 +83,6 @@ namespace servercore
 
 		if (_isClosed.load() == true)
 		{
-			std::cout << "1" << std::endl;
 			NetworkUtils::CloseSocket(acceptEvent->GetAcceptSocket());
 			cdelete(acceptEvent);
 			_pendingAccepts.fetch_sub(1);
@@ -170,8 +167,12 @@ namespace servercore
 
 		NetworkAddress remoteAddress(remoteSocketAddress);
 
-		std::shared_ptr<Session> newSession = MakeShared<Session>(_iocpCore, _serverCore, acceptEvent->GetAcceptSocket(), remoteAddress);
-
+		auto newSession = _serverCore->CreateSession();
+		assert(newSession);
+		
+		newSession->SetSocket(acceptEvent->GetAcceptSocket());
+		newSession->SetRemoteAddress(remoteAddress);
+		
 		if (_iocpCore->Register(std::static_pointer_cast<IocpObject>(newSession)) == false)
 		{
 			_serverCore->HandleError(__FUNCTION__, __LINE__, "_iocpCore->Register() : ", ::WSAGetLastError());
@@ -182,6 +183,6 @@ namespace servercore
 		_serverCore->AddSession(newSession);
 
 		//	TODO
-		newSession->StartAcceptedSession();
+		newSession->ProcessConnect();
 	}
 }

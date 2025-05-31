@@ -205,6 +205,7 @@ namespace servercore
 
 	void ThreadManager::DestroyThreadLocal()
 	{
+		SendBufferArena::ThreadSendBufferClear();
 		GMemoryPool->ThreadLocalCacheClear();
 	}
 

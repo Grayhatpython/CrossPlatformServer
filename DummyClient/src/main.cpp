@@ -1,99 +1,59 @@
 #include "Pch.hpp"  
 
 #include "ServerCore.hpp"
-#include "Session.hpp"
+#include "ServerSession.hpp"
+
+#pragma pack(push, 1)
+struct TestPacket : PacketHeader
+{
+    uint64 playerId;
+    uint64 playerMp;
+};
+#pragma pack(pop)
+
 
 #if defined(PLATFORM_WINDOWS)
-void HandleError(const char* cause)
-{
-    int32 errorCode = ::WSAGetLastError();
-    std::cout << cause << " ErrorCode : " << errorCode << std::endl;
-}
 
 int main()
 {
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    {
-        std::unique_ptr<servercore::ServerCore> serverCore = std::make_unique<servercore::ServerCore>(8888, 1);
-        auto clientSession = serverCore->CreateClientSessionAndConnect(servercore::NetworkAddress("127.0.0.1", 8888));
-        assert(clientSession);
 
-        std::string message = "hello Server";
+    {
+        std::function<std::shared_ptr<ServerSession>()> sessionFactory = []() {
+            return servercore::MakeShared<ServerSession>();
+            };
+
+        std::shared_ptr<servercore::ClinetService> client = std::make_shared<servercore::ClinetService>(2, sessionFactory);      
+        std::vector< std::shared_ptr<servercore::Session>> serverSessions;
+        auto session = client->Connect(servercore::NetworkAddress("127.0.0.1", 8888), 1, serverSessions);
 
         while (true)
         {
-            std::cout << "!" << std::endl;
-            clientSession->Send(reinterpret_cast<const BYTE*>(message.data()), message.length());
+            //  패킷생성해서 Send 테스트..
+            //  좀 사용하기 난잡하고 가변 길이 처리도 안됨.. 
+            //  수정필요
+            auto segment = servercore::SendBufferArena::Allocate(sizeof(TestPacket));
+            if (segment->successed == false)
+                assert(false);  //  ???
+
+            TestPacket* testPacket = reinterpret_cast<TestPacket*>(segment->ptr);
+            testPacket->id = 3;
+            testPacket->playerId = 3;
+            testPacket->playerMp = 6;
+            testPacket->size = sizeof(TestPacket);
+
+            auto sendContext = std::make_shared<servercore::SendContext>();
+            sendContext->sendBuffer = segment->sendBuffer;
+            sendContext->wsaBuf.buf = reinterpret_cast<CHAR*>(segment->ptr);
+            sendContext->wsaBuf.len = static_cast<ULONG>(sizeof(TestPacket));
+
+
+            for (auto& serverSession : serverSessions)
+                serverSession->Send(sendContext);
+
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
     }
-
-    WSADATA wsaData;
-    if (::WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
-        return 0;
-
-    SOCKET clientSocket = ::socket(AF_INET, SOCK_STREAM, 0);
-    if (clientSocket == INVALID_SOCKET)
-        return 0;
-
-    u_long on = 1;
-    if (::ioctlsocket(clientSocket, FIONBIO, &on) == INVALID_SOCKET)
-        return 0;
-
-    SOCKADDR_IN serverAddr;
-    std::memset(&serverAddr, 0, sizeof(serverAddr));
-    serverAddr.sin_family = AF_INET;
-    ::inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
-    serverAddr.sin_port = htons(8888);
-
-    while (true)
-    {
-        if (::connect(clientSocket, (SOCKADDR*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
-        {
-            if (::WSAGetLastError() == WSAEWOULDBLOCK)
-                continue;
-            if (::WSAGetLastError() == WSAEISCONN)
-                break;
-
-            break;
-        }
-    }
-
-    std::cout << "Connected to Server!" << std::endl;
-
-    char sendBuffer[100] = "Hello World";
-    WSAEVENT wsaEvent = ::WSACreateEvent();
-    WSAOVERLAPPED overlapped = {};
-    overlapped.hEvent = wsaEvent;
-
-    while (true)
-    {
-        WSABUF wsaBuf;
-        wsaBuf.buf = sendBuffer;
-        wsaBuf.len = 100;
-
-        DWORD sendLen = 0;
-        DWORD flags = 0;
-        if (::WSASend(clientSocket, &wsaBuf, 1, &sendLen, flags, &overlapped, nullptr) == SOCKET_ERROR)
-        {
-            if (::WSAGetLastError() == WSA_IO_PENDING)
-            {
-                ::WSAWaitForMultipleEvents(1, &wsaEvent, TRUE, WSA_INFINITE, FALSE);
-                ::WSAGetOverlappedResult(clientSocket, &overlapped, &sendLen, FALSE, &flags);
-            }
-            else
-                break;
-        }
-
-        std::cout << "Send Data! Len = " << sizeof(sendBuffer) << std::endl;
-
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-    }
-
-    ::closesocket(clientSocket);
-
-    ::WSACleanup();
-
     return 0;
 }
 #else

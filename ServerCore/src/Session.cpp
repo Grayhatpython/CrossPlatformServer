@@ -1,30 +1,15 @@
 #include "Pch.hpp"
 #include "Session.hpp"
 #include "ServerCore.hpp"
+#include "Packet.hpp"
 
 namespace servercore
 {
 	std::atomic<uint64> Session::S_GenerateSessionId = 1;
 
-	Session::Session(std::shared_ptr<IocpCore> iocpCore, ServerCore* serverCore, SOCKET socket, NetworkAddress remoteAddress)
-		: _iocpCore(iocpCore), _serverCore(serverCore), _socket(socket), _remoteAddres(remoteAddress)
+	Session::Session()
 	{
 		_sessionId = S_GenerateSessionId.fetch_add(1);
-		_isConnected.store(true);
-
-		assert(_iocpCore);
-		assert(_serverCore);
-		assert(_socket != INVALID_SOCKET);
-	}
-
-	Session::Session(std::shared_ptr<IocpCore> iocpCore, ServerCore* serverCore)
-		: _iocpCore(iocpCore), _serverCore(serverCore)
-	{
-		_sessionId = S_GenerateSessionId.fetch_add(1);
-		_isConnected.store(false);
-		
-		assert(_iocpCore);
-		assert(_serverCore);
 	}
 
 	Session::~Session()
@@ -35,23 +20,12 @@ namespace servercore
 		CloseSocket();
 		
 		//	TEMP
-		while (_sendBufferQueue.empty() == false)
-			_sendBufferQueue.pop();
-	}
-
-	void Session::StartAcceptedSession()
-	{
-		if (_isConnected.load() == false)
-			return;
-
-		_serverCore->OnSessionConnected(std::static_pointer_cast<Session>(shared_from_this()));
-
-		RegisterRecv();
+		while (_sendContextQueue.empty() == false)
+			_sendContextQueue.pop();
 	}
 
 	bool Session::Connect(NetworkAddress& targetAddress)
 	{
-		//	�̹� ����� ��� -> �ϴ��� false
 		if (_isConnected.load() == true || _isConnectPending.load() == true)
 		{
 			assert(false);
@@ -101,28 +75,23 @@ namespace servercore
 		RegisterDisconnect(disconnectEvent);
 	}
 
-	bool Session::Send(const BYTE* data, int32 length)
+	bool Session::Send(std::shared_ptr<SendContext> sendContext)
 	{
-		if (_isConnected.load() == false || data == nullptr || length == 0)
+		if (_isConnected.load() == false)
 			return false;
 
-		SendEvent* sendEvent = cnew<SendEvent>();
-		sendEvent->SetOwner(shared_from_this());
-
-		auto sendBuffer = MakeShared<SendBuffer>(data, length);
-		
 		bool shouldRegister = false;
 
 		{
 			WriteLockGuard lock(_lock);
-			_sendBufferQueue.push(sendBuffer);
+			_sendContextQueue.push(sendContext);
 
 			if (_isSending.exchange(true) == false)
 				shouldRegister = true;
 		}
 
 		if (shouldRegister)
-			RegisterSend(sendEvent);
+			RegisterSend();
 
 		return true;
 	}
@@ -156,7 +125,7 @@ namespace servercore
 				ProcessDisconnect(static_cast<DisconnectEvent*>(networkEvent), numOfBytes);
 				break;
 
-				//	Peer�� shutdown() or closesocket() ���� ����
+				//	Peer�� shutdown() or closesocket() ���� ����
 			case NetworkEventType::Recv:
 			case NetworkEventType::Send:
 				HandleError(networkEvent, ERROR_SUCCESS);
@@ -206,7 +175,6 @@ namespace servercore
 			if (errorCode != WSA_IO_PENDING)
 			{
 				_isConnectPending.store(false);
-				_serverCore->OnClientSessionDisconnected(connectEvent->GetOwnerSession(), errorCode);
 				_serverCore->HandleError(__FUNCTION__, __LINE__, "NetworkUtils::S_ConnectEx() : ", ::WSAGetLastError());
 				CloseSocket();
 				cdelete(connectEvent);
@@ -228,7 +196,6 @@ namespace servercore
 				cdelete(disconnectEvent);
 
 				_isConnected.store(false);
-				_serverCore->OnSessionDisconnected(std::static_pointer_cast<Session>(shared_from_this()));
 				CloseSocket();
 				_serverCore->RemoveSession(std::static_pointer_cast<Session>(shared_from_this()));
 			}
@@ -239,14 +206,17 @@ namespace servercore
 	{
 		if (_isConnected.load() == false)
 			return;
-		sizeof(RecvEvent);
+
 		RecvEvent* recvEvent = cnew<RecvEvent>();
 		recvEvent->SetOwner(shared_from_this());
+
+		WSABUF wsaBuf;
+		_streamBuffer.PrepareWSARecvWsaBuf(wsaBuf);
 
 		DWORD numOfBytes = 0;
 		DWORD flags = 0;
 
-		auto ret = ::WSARecv(_socket, (&recvEvent->GetWSABuf()), 1, &numOfBytes, &flags, static_cast<LPOVERLAPPED>(recvEvent), nullptr);
+		auto ret = ::WSARecv(_socket, (&wsaBuf), 1, &numOfBytes, &flags, static_cast<LPOVERLAPPED>(recvEvent), nullptr);
 
 		if (ret == SOCKET_ERROR)
 		{
@@ -260,8 +230,11 @@ namespace servercore
 		}
 	}
 
-	void Session::RegisterSend(SendEvent* sendEvent)
+	void Session::RegisterSend()
 	{
+		SendEvent* sendEvent = cnew<SendEvent>();
+		sendEvent->SetOwner(shared_from_this());
+
 		if (_isConnected.load() == false)
 		{
 			_isSending.store(false);
@@ -271,27 +244,20 @@ namespace servercore
 
 		{
 			WriteLockGuard lock(_lock);
-			while (_sendBufferQueue.empty() == false)
+			while (_sendContextQueue.empty() == false)
 			{
-				auto& sendBuffer = _sendBufferQueue.front();
-				sendEvent->GetSendBuffers().push_back(sendBuffer);
-				_sendBufferQueue.pop();
+				auto& sendBuffer = _sendContextQueue.front();
+				sendEvent->GetSendContexts().push_back(sendBuffer);
+				_sendContextQueue.pop();
 			}
 
 			//_sendRegisterCount.store(_sendQueue.size());
 		}
 
-		//	�ϴ��� �޸�Ǯ�� �����ֱ��ϴ�.. �ٵ� ���踦 ���ľ� �� �ʿ䰡
 		std::vector<WSABUF> wsaBufs;
-		wsaBufs.reserve(sendEvent->GetSendBuffers().size());
-		for (auto& sendBuffer : sendEvent->GetSendBuffers())
-		{
-			WSABUF wsaBuf;
-			std::memset(&wsaBuf, 0, sizeof(wsaBuf));
-			wsaBuf.buf = reinterpret_cast<CHAR*>(sendBuffer->GetBuffer());
-			wsaBuf.len = sendBuffer->GetLength();
-			wsaBufs.push_back(wsaBuf);
-		}
+		wsaBufs.reserve(sendEvent->GetSendContexts().size());
+		for (auto& sendContext : sendEvent->GetSendContexts())
+			wsaBufs.push_back(sendContext->wsaBuf);
 
 		DWORD numOfBytes = 0;
 		auto ret = ::WSASend(_socket, wsaBufs.data(), static_cast<DWORD>(wsaBufs.size()), &numOfBytes, 0, static_cast<LPWSAOVERLAPPED>(sendEvent), nullptr);
@@ -302,15 +268,15 @@ namespace servercore
 			if (errorCode != WSA_IO_PENDING) 
 			{
 				_serverCore->HandleError(__FUNCTION__, __LINE__, "WSASend() : ", errorCode);
-				sendEvent->GetSendBuffers().clear();
+				sendEvent->GetSendContexts().clear();
 				cdelete(sendEvent);
 				_isSending.store(false);
 
 				{
 					//	TODO
 					WriteLockGuard lock(_lock);
-					while (_sendBufferQueue.empty() == false)
-						_sendBufferQueue.pop();
+					while (_sendContextQueue.empty() == false)
+						_sendContextQueue.pop();
 				}
 
 				Disconnect();
@@ -318,9 +284,25 @@ namespace servercore
 		}
 	}
 
+	//	Server에서 AcceptEx로 연결된 클라이언트 후처리
+	void Session::ProcessConnect()
+	{
+		//	이미 연결되어 있다???
+		if (_isConnected.exchange(true) == true)
+			return;
+
+		OnConnected();
+
+		RegisterRecv();
+	}
+
+	//	Client에서 ConnectEx로 연결된 서버 후처리
 	void Session::ProcessConnect(ConnectEvent* connectEvent, int32 numOfBytes)
 	{
-		_isConnectPending.store(false);
+		//	ConnectEx 요청없이 들어왔따??
+		if (_isConnectPending.exchange(false) == false)
+			return;
+
 		int32 connectError = 0;
 		int32 optLen = sizeof(connectError);
 		//	ConnectEx
@@ -335,13 +317,14 @@ namespace servercore
 		{
 			//	ConnectEx
 			_isConnected.store(true);
-			_serverCore->OnClientSessionConnected(session);
+
+			OnConnected();
+
 			RegisterRecv();
 		}
 		else
 		{
 			_isConnected.store(false);
-			_serverCore->OnClientSessionDisconnected(session, ::WSAGetLastError());
 			_serverCore->HandleError(__FUNCTION__, __LINE__, "ConnectEx Failed : ", ::WSAGetLastError());
 			CloseSocket();
 			_serverCore->RemoveSession(session);
@@ -356,10 +339,7 @@ namespace servercore
 
 		auto session = disconnectEvent->GetOwnerSession();
 
-		if (_isConnectPending.load() == true)
-			_serverCore->OnClientSessionDisconnected(session, ERROR_SUCCESS);
-		else
-			_serverCore->OnSessionDisconnected(session);
+		OnDisconnected();
 
 		CloseSocket();
 		_serverCore->RemoveSession(session);
@@ -369,26 +349,67 @@ namespace servercore
 
 	void Session::ProcessRecv(RecvEvent* recvEvent, int32 numOfBytes)
 	{
-		auto session = recvEvent->GetOwnerSession();
-		_serverCore->OnSessionRecv(session, reinterpret_cast<BYTE*>(recvEvent->GetWSABuf().buf), numOfBytes);
-
 		cdelete(recvEvent);
+
+		//	처리된 데이터 크기만큼 streamBuffer writePos 처리
+		if (_streamBuffer.OnWrite(numOfBytes) == false)
+		{
+			//	정해진 용량 초과 -> 연결 종료 
+			Disconnect();
+			return;
+		}
+
+		//	패킷 파싱 처리
+		while (true)
+		{
+			const int32 readableSize = _streamBuffer.GetReadableSize();
+
+			//	최소한 헤더 크기만큼의 데이터가 없으면 파싱 하지 않음
+			if (readableSize < sizeof(PacketHeader))
+				break;
+
+			//	헤더를 읽어서 전체 패킷 크기 확인
+			PacketHeader* packetHeader = reinterpret_cast<PacketHeader*>(_streamBuffer.GetReadPos());
+			const uint16 packetSize = packetHeader->size;
+
+			//	확인한 패킷 크기가 패킷 헤더보다 작다면 -> ?? 로직에 벗어난 패킷임
+			if (packetSize < sizeof(PacketHeader))
+			{
+				//	비정상적인 패킷 크기 연결 종료
+				Disconnect();
+				return;
+			}
+
+			//	패킷 하나만큼의 사이즈를 읽을 수 있다면 -> 완성된 하나의 패킷을 읽을 수 있다면
+			if (readableSize < packetSize)
+				break;
+
+			//	컨텐츠 영역 ( 서버 or 클라이언트 ) 에서 해당 패킷에 대한 로직 처리
+			OnRecv(_streamBuffer.GetReadPos(), numOfBytes);
+
+			//	streamBuffer ReadPos 처리
+			if (_streamBuffer.OnRead(numOfBytes) == false)
+			{
+				//	??? 로직상 오면 안되는 부분 연결 종료
+				Disconnect();
+				return;
+			}
+		}
+
 		RegisterRecv();
 	}
 
 	void Session::ProcessSend(SendEvent* sendEvent, int32 numOfBytes)
 	{
-		sendEvent->GetSendBuffers().clear();
+		sendEvent->GetSendContexts().clear();
 		cdelete(sendEvent);
+
+		OnSend();
 
 		{
 			WriteLockGuard lock(_lock);
-			if (_sendBufferQueue.empty() == false)
-			{
-				SendEvent* sendEvent = cnew<SendEvent>();
-				sendEvent->SetOwner(shared_from_this());
-				RegisterSend(sendEvent);
-			}
+			if (_sendContextQueue.empty() == false)
+				RegisterSend();
 			else
 				_isSending.store(false);
 		}
@@ -420,12 +441,6 @@ namespace servercore
 		{
 			_isConnectPending.store(false);
 			CloseSocket();
-
-			//	TODO
-			if (networkEvent->GetNetworkEventType() == NetworkEventType::Connect)
-				_serverCore->OnClientSessionDisconnected(session, errorCode);
-			else
-				_serverCore->OnSessionDisconnected(session);
 
 			_serverCore->RemoveSession(session);
 		}

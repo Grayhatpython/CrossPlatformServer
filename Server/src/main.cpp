@@ -34,6 +34,9 @@ public:
 
 
 #include "ServerCore.hpp"
+#include "ClientSession.hpp"
+
+
 
 int main()
 {
@@ -44,12 +47,16 @@ int main()
     // 콘솔 출력 코드 페이지를 UTF-8 (65001)로 설정
     ::SetConsoleOutputCP(CP_UTF8);
 
-    //::_CrtSetBreakAlloc(574);
+    //::_CrtSetBreakAlloc(270);
 #endif
-
+    
     {
-        std::unique_ptr<servercore::ServerCore> serverCore = std::make_unique<servercore::ServerCore>(8888, 1);
-        serverCore->Start();
+        std::function<std::shared_ptr<ClientSession>()> sessionFactory = []() {
+            return servercore::MakeShared<ClientSession>();
+            };
+
+        std::shared_ptr<servercore::ServerService> server = std::make_shared<servercore::ServerService>(1, sessionFactory);
+        server->Start(8888);
 
         char input;
 
@@ -60,6 +67,8 @@ int main()
             if (input == 'q' || input == 'Q')
                 break;
         }
+
+        server->Stop();
 
         /*
         auto start = std::chrono::high_resolution_clock::now();
@@ -91,3 +100,11 @@ int main()
 
     return 0;
 } 
+
+
+
+
+
+
+
+

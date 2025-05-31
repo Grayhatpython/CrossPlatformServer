@@ -2,13 +2,17 @@
 # 이 변수는 나중에 빌드될 실행 파일의 이름으로 사용
 set(APP_NAME "Server")
 
-# 서버의 주요 소스 파일들을 찾아서 SOURCES 변수에 저장
-# GLOB는 편리하지만, 소스 파일이 추가되거나 삭제되었을 때 CMake를 수동으로 다시 실행해야 할 수 있다
-file(GLOB SOURCES "src/*.cpp")
-file(GLOB HEADERS "include/*.hpp")
+# 소스 파일과 헤더 파일을 변수에 담아 관리
+set(SOURCES
+    src/main.cpp
+    src/ClientSession.cpp
+)
 
-# 최종 실행 파일(`APP_NAME` 즉, "Server")을 생성
-# 이 실행 파일을 만들기 위해 위에서 정의한 모든 소스 파일들(Server 소스, ImGui 소스)을 사용
+set(HEADERS
+    include/ClientSession.hpp
+)
+
+# 소스 파일과 헤더 파일을 함께 타겟에 추가
 add_executable(${APP_NAME} ${SOURCES} ${HEADERS})
 
 # --- 미리 컴파일된 헤더(Precompiled Headers, PCH) 설정 ---
@@ -23,3 +27,6 @@ target_precompile_headers(${APP_NAME} PRIVATE ${SERVER_PCH_HEADER})
 target_link_libraries(${APP_NAME} PRIVATE 
     ServerCore              # 서버 핵심 라이브러리
 )
+
+# 타겟에 인클루드 디렉토리 추가
+target_include_directories(${APP_NAME} PRIVATE "include")

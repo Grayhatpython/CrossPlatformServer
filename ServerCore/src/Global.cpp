@@ -2,7 +2,7 @@
 #include "Global.hpp"
 #include "MemoryPool.hpp"
 #include "ThreadManager.hpp"
-#include "NetworkUtils.hpp"
+#include "SendBufferPool.hpp"
 
 namespace servercore
 {
@@ -32,6 +32,9 @@ namespace servercore
 			delete GThreadManager;
 			GThreadManager = nullptr;
 		}
+
+		SendBufferArena::ThreadSendBufferClear();
+		SendBufferArena::SendBufferPoolClear();
 
 		if (GMemoryPool)
 		{

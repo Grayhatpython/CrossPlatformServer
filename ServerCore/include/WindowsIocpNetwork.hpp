@@ -83,6 +83,15 @@ namespace servercore
 	};
 
 	class SendBuffer;
+	//	WSASend시 SendBuffer 즉, 요청보낸 Send data가 삭제되면 안되므로 SendBuffer의 Ref Count를 증가시켜서
+	//	GQCS -> Dispatch -> ProcessSend에서 WSASend가 정상적으로 완료되었을 때 Ref Count를 0으로 만들어 제거
+	//	Owner인 WSASend, WSARecv 등 IO 작업의 주체자도 물론 Io 진행시 삭제되면 안되므로 동등하게 Ref Count로 관리
+	struct SendContext
+	{
+		std::shared_ptr<SendBuffer> sendBuffer;
+		WSABUF						wsaBuf{};
+	};
+
 	class SendEvent : public NetworkEvent
 	{
 	public:
@@ -93,10 +102,10 @@ namespace servercore
 
 	public:
 		std::shared_ptr<Session>					GetOwnerSession();
-		std::vector<std::shared_ptr<SendBuffer>>&	GetSendBuffers() { return _sendBuffers; }
+		std::vector<std::shared_ptr<SendContext>>&	GetSendContexts() { return _sendContexts; }
 
 	private:
-		std::vector<std::shared_ptr<SendBuffer>>	_sendBuffers;
+		std::vector<std::shared_ptr<SendContext>>	_sendContexts;
 	};
 
 	class RecvEvent : public NetworkEvent
@@ -105,18 +114,12 @@ namespace servercore
 		RecvEvent()
 			: NetworkEvent(NetworkEventType::Recv)
 		{
-			//	TEMP
-			_wsaBuf.buf = reinterpret_cast<CHAR*>(_buffer.data());
-			_wsaBuf.len = static_cast<ULONG>(_buffer.size());
+
 		}
 
 	public:
 		std::shared_ptr<Session>	GetOwnerSession();
-		WSABUF&						GetWSABuf() { return _wsaBuf; }
 
-	private:
-		std::array<BYTE, 4096>	_buffer;	//	TEMP
-		WSABUF					_wsaBuf{};
 	};
 
     // IOCP에 등록될 수 있는 객체를 위한 기본 인터페이스 클래스

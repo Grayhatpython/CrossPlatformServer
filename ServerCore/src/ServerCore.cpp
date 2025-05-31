@@ -5,47 +5,20 @@
 
 namespace servercore
 {
-	ServerCore::ServerCore(uint16 port, int32 workerThreadCount)
-		: _listenNetworkAddress("0.0.0.0", port)
+	ServerCore::ServerCore(int32 workerThreadCount, std::function<std::shared_ptr<Session>()> sessionFactory)
+		: _sessionFactory(sessionFactory)
 	{
 		NetworkUtils::Initialize(); 
 
 		_core = new CoreGlobal();
-
 		_workerThreadCount = workerThreadCount > 0 ? workerThreadCount : std::thread::hardware_concurrency();
-
 		_iocpCore = std::make_shared<IocpCore>();
-		_acceptor = std::make_shared<Acceptor>(_iocpCore, this);
 	}
 
 	ServerCore::~ServerCore()
 	{
 		Stop();
 		NetworkUtils::Clear();
-	}
-
-	bool ServerCore::Start()
-	{
-		if (_isRunning.exchange(true) == true)
-			return false;
-
-		//	TODO : 50
-		if (_acceptor->Start(_listenNetworkAddress, 50) == false)
-		{
-			HandleError(__FUNCTION__, __LINE__, "ConnectEx Failed : ", ERROR_SUCCESS);
-			_isRunning.store(false);
-			return false;
-		}
-
-		_iocpWorkerThreads.reserve(_workerThreadCount);
-		for (auto i = 0; i < _workerThreadCount; i++)
-			_iocpWorkerThreads.emplace_back(&ServerCore::IocpWorkerThread, this);
-
-		std::cout << "ServerCore Started." << std::endl;
-		std::cout << "Listening Info : ip[ " << _listenNetworkAddress.GetIpStringAddress() << " ] " << "port[ " << _listenNetworkAddress.GetPort() << " ]" <<  std::endl;
-		std::cout << "WorkerThread Count : " << _workerThreadCount << std::endl;
-
-		return true;
 	}
 
 	void ServerCore::Stop()
@@ -55,14 +28,8 @@ namespace servercore
 
 		std::cout << "ServerCore stopping..." << std::endl;
 
-		{
-			//	acceptor clear
-			if (_acceptor)
-				_acceptor->Close();	//	TODO
-
-			//	acceptor clear wait 
-			std::this_thread::sleep_for(std::chrono::seconds(1));
-		}
+		//	Í∞Å ServiceÎ≥Ñ Stop Logic Ïã§Ìñâ
+		OnStop();
 
 		{
 			//	session clear
@@ -117,8 +84,6 @@ namespace servercore
 		}
 
 		{
-			//	core clear
-			_acceptor.reset();
 			_iocpCore.reset();
 
 			if (_core)
@@ -128,61 +93,20 @@ namespace servercore
 			}
 		}
 
+		_isRunning.store(false);
 		std::cout << "ServerCore stopped..." << std::endl;
-	}
-	
-	//	TODO
-	void ServerCore::OnSessionConnected(std::shared_ptr<Session> session)
-	{
-
-	}
-	void ServerCore::OnSessionDisconnected(std::shared_ptr<Session> session)
-	{
-	}
-	void ServerCore::OnSessionRecv(std::shared_ptr<Session> session, const BYTE* data, int32 length)
-	{
-		//	TEST
-		std::cout << data << " : " << length << std::endl;
-	}
-	void ServerCore::OnClientSessionConnected(std::shared_ptr<Session> session)
-	{
-	}
-	void ServerCore::OnClientSessionDisconnected(std::shared_ptr<Session> session, int32 errorCode)
-	{
-	}
-
-	std::shared_ptr<Session> ServerCore::CreateClientSessionAndConnect(NetworkAddress& targetAddress)
-	{
-		if (_isRunning.exchange(true) == true)
-		{
-			HandleError(__FUNCTION__, __LINE__, "Server not running", ERROR_SUCCESS);
-			return nullptr;
-		}
-
-		_iocpWorkerThreads.reserve(_workerThreadCount);
-		for (auto i = 0; i < _workerThreadCount; i++)
-			_iocpWorkerThreads.emplace_back(&ServerCore::IocpWorkerThread, this);
-
-		std::cout << "ServerCore Started." << std::endl;
-		std::cout << "Target Info : ip[ " << targetAddress.GetIpStringAddress() << " ] " << "port[ " << targetAddress.GetPort() << " ]" << std::endl;
-		std::cout << "WorkerThread Count : " << _workerThreadCount << std::endl;
-
-		auto clientSession = std::make_shared<Session>(_iocpCore, this);
-
-		AddSession(clientSession);
-
-		if (clientSession->Connect(targetAddress) == false) {
-			HandleError(__FUNCTION__, __LINE__, "clientSession->Connect() ", ERROR_SUCCESS);
-			RemoveSession(clientSession);
-			return nullptr;
-		}
-
-		return clientSession;
 	}
 
 	void ServerCore::HandleError(const char* func, int32 lineNumber, const std::string& message, int32 errorCode)
 	{
 		std::cerr << "[ERROR] Func: " << func << " | Line: " << lineNumber << " | Msg: " << message << " | Code: " << errorCode << " (0x" << std::hex << errorCode << std::dec << ")\n";
+	}
+
+	void ServerCore::StartWorkerThread()
+	{
+		_iocpWorkerThreads.reserve(_workerThreadCount);
+		for (auto i = 0; i < _workerThreadCount; i++)
+			_iocpWorkerThreads.emplace_back(&ServerCore::IocpWorkerThread, this);
 	}
 
 	void ServerCore::IocpWorkerThread()
@@ -193,7 +117,7 @@ namespace servercore
 		{
 			IocpGQCSResult result = _iocpCore->Dispatch(100);
 
-			//	CriticalError¥¬ ... æ∆¡˜ √≥∏Æ ∞ÌπŒ
+			//	CriticalErrorÔøΩÔøΩ ... ÔøΩÔøΩÔøΩÔøΩ √≥ÔøΩÔøΩ ÔøΩÔøΩÔøΩÔøΩ
 			if (result == IocpGQCSResult::Exit || result == IocpGQCSResult::CriticalError)
 				break;
 		}
@@ -228,5 +152,120 @@ namespace servercore
 			std::unique_lock<std::mutex> lock(_mutex);
 			_cv.notify_all();
 		}
+	}
+
+	std::shared_ptr<Session> ServerCore::CreateSession()
+	{
+		auto session = _sessionFactory();
+		assert(session);
+
+		session->SetIocpCore(_iocpCore);
+		session->SetServerCore(shared_from_this());
+
+		return session;
+	}
+
+	ServerService::ServerService(int32 workerThreadCount, std::function<std::shared_ptr<Session>()> sessionFactory)
+		:	ServerCore(workerThreadCount, sessionFactory), _acceptor(std::make_shared<Acceptor>())
+	{
+
+	}
+
+	ServerService::~ServerService()
+	{
+
+	}
+
+	bool ServerService::Start(uint16 port)
+	{
+		if (_isRunning.exchange(true) == true)
+		{
+			HandleError(__FUNCTION__, __LINE__, "ServerService is already starting", ERROR_SUCCESS);
+			return false;
+		}
+
+		assert(_acceptor);
+		_acceptor->SetIocpCore(_iocpCore);
+		_acceptor->SetServerCore(shared_from_this());
+
+		//	TODO : 50
+		if (_acceptor->Start(port) == false)
+		{
+			HandleError(__FUNCTION__, __LINE__, "ConnectEx Failed : ", ERROR_SUCCESS);
+			_isRunning.store(false);
+			return false;
+		}
+
+		_port = port;
+
+		StartWorkerThread();
+
+		std::cout << "ServerService Started." << std::endl;
+		std::cout << "Listening Info : ip[ " << _listenNetworkAddress.GetIpStringAddress() << " ] " << "port[ " << _listenNetworkAddress.GetPort() << " ]" << std::endl;
+		std::cout << "WorkerThread Count : " << _workerThreadCount << std::endl;
+
+		return true;
+	}
+
+	void ServerService::OnStop()
+	{
+		//	acceptor clear
+		if (_acceptor)
+			_acceptor->Close();	//	TODO
+
+		//	acceptor clear wait 
+		std::this_thread::sleep_for(std::chrono::seconds(1));
+
+		_acceptor.reset();
+	}
+
+	ClinetService::ClinetService(int32 workerThreadCount, std::function<std::shared_ptr<Session>()> sessionFactory)
+		: ServerCore(workerThreadCount, sessionFactory)
+	{
+
+	}
+
+	ClinetService::~ClinetService()
+	{
+
+	}
+
+	void ClinetService::OnStop()
+	{
+
+	}
+
+	bool ClinetService::Connect(NetworkAddress& targetAddress, int32 connectionCount, std::vector<std::shared_ptr<Session>>& sessions)
+	{
+		if (_isRunning.exchange(true) == true)
+		{
+			HandleError(__FUNCTION__, __LINE__, "Server not running", ERROR_SUCCESS);
+			return false;
+		}
+
+
+		for (auto i = 0; i < connectionCount; i++)
+		{
+			auto seession = CreateSession();
+			assert(seession);
+
+			AddSession(seession);
+
+			if (seession->Connect(targetAddress) == false) {
+				HandleError(__FUNCTION__, __LINE__, "clientSession->Connect() ", ERROR_SUCCESS);
+				RemoveSession(seession);
+				return false;
+			}
+
+			sessions.push_back(seession);
+		}
+
+		StartWorkerThread();
+
+		std::cout << "ClinetService Started." << std::endl;
+		std::cout << "Target Info : ip[ " << targetAddress.GetIpStringAddress() << " ] " << "port[ " << targetAddress.GetPort() << " ]" << std::endl;
+		std::cout << "WorkerThread Count : " << _workerThreadCount << std::endl;
+
+		return true;
 	}
 }
