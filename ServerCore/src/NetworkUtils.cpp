@@ -29,6 +29,8 @@ namespace servercore
 		assert(::WSAIoctl(dummySocket, SIO_GET_EXTENSION_FUNCTION_POINTER, &guid, sizeof(guid), reinterpret_cast<LPVOID>(&S_AcceptEx), sizeof(S_AcceptEx), &bytes, NULL, NULL) != SOCKET_ERROR);
 
 		CloseSocket(dummySocket);
+#else
+		::signal(SIGPIPE, SIG_IGN);
 #endif
 	}
 

@@ -1,4 +1,5 @@
 #pragma once
+#include "Types.hpp"
 
 enum class NetworkEventType : uint8
 {
@@ -10,7 +11,7 @@ enum class NetworkEventType : uint8
 	Send
 };
 
-enum class IocpGQCSResult
+enum class DispatchResult
 {
 	Success,
 	IoError,

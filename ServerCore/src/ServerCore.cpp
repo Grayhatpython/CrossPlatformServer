@@ -2,6 +2,7 @@
 #include "ServerCore.hpp"
 #include "Acceptor.hpp"
 #include "Session.hpp"
+#include "WindowsIocpNetwork.hpp"
 
 namespace servercore
 {
@@ -12,7 +13,7 @@ namespace servercore
 
 		_core = new CoreGlobal();
 		_workerThreadCount = workerThreadCount > 0 ? workerThreadCount : std::thread::hardware_concurrency();
-		_iocpCore = std::make_shared<IocpCore>();
+		_networkDispatcher = std::make_shared<WindowsIocpDispatcher>();
 	}
 
 	ServerCore::~ServerCore()
@@ -63,7 +64,7 @@ namespace servercore
 		{
 			//	thread clase
 			for (auto i = 0; i < _workerThreadCount; i++)
-				_iocpCore->PostExitSignal();
+				_networkDispatcher->PostExitSignal();
 
 			for (std::thread& t : _iocpWorkerThreads)
 			{
@@ -84,7 +85,7 @@ namespace servercore
 		}
 
 		{
-			_iocpCore.reset();
+			_networkDispatcher.reset();
 
 			if (_core)
 			{
@@ -115,10 +116,10 @@ namespace servercore
 
 		while (_isRunning.load() == true)
 		{
-			IocpGQCSResult result = _iocpCore->Dispatch(100);
+			DispatchResult result = _networkDispatcher->Dispatch(100);
 
-			//	CriticalError�� ... ���� ó�� ����
-			if (result == IocpGQCSResult::Exit || result == IocpGQCSResult::CriticalError)
+			//	CriticalError or Exit Singal 
+			if (result == DispatchResult::Exit || result == DispatchResult::CriticalError)
 				break;
 		}
 
@@ -159,7 +160,7 @@ namespace servercore
 		auto session = _sessionFactory();
 		assert(session);
 
-		session->SetIocpCore(_iocpCore);
+		session->SetNetworkDispatcher(_networkDispatcher);
 		session->SetServerCore(shared_from_this());
 
 		return session;
@@ -185,7 +186,7 @@ namespace servercore
 		}
 
 		assert(_acceptor);
-		_acceptor->SetIocpCore(_iocpCore);
+		_acceptor->SetNetworkDispatcher(_networkDispatcher);
 		_acceptor->SetServerCore(shared_from_this());
 
 		//	TODO : 50

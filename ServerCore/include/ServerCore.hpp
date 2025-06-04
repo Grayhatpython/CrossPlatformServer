@@ -1,10 +1,11 @@
 #pragma once	
 
+
 namespace servercore
 {
 	class Session;
 	class Acceptor;
-	class IocpCore;
+	class INetworkDispatcher;
 
 	class ServerCore : public std::enable_shared_from_this<ServerCore>
 	{
@@ -34,12 +35,12 @@ namespace servercore
 		void SetSessionFactory(std::function<std::shared_ptr<Session>()> sessionFactory) { _sessionFactory = sessionFactory; }
 
 	public:
-		std::shared_ptr<IocpCore>		GetIocpCore() { return _iocpCore; }
+		std::shared_ptr<INetworkDispatcher>		GetNetworkDispatcher() { return _networkDispatcher; }
 		
 	protected:
 		CoreGlobal*										_core;
 
-		std::shared_ptr<IocpCore>						_iocpCore;
+		std::shared_ptr<INetworkDispatcher>				_networkDispatcher;
 
 		std::unordered_set<std::shared_ptr<Session>>	_sessions;
 		Lock											_lock;

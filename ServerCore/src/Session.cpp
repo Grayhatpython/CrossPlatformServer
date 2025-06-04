@@ -46,7 +46,7 @@ namespace servercore
 			return false;
 		}
 
-		if (_iocpCore->Register(shared_from_this()) == false)
+		if (_networkDispatcher->Register(shared_from_this()) == false)
 		{
 			_serverCore->HandleError(__FUNCTION__, __LINE__, "_iocpCore->Register() : ", ::WSAGetLastError());
 			NetworkUtils::CloseSocket(_socket);
@@ -56,7 +56,7 @@ namespace servercore
 		_remoteAddres = targetAddress;
 		_isConnectPending.store(true);
 
-		ConnectEvent* connectEvent = cnew<ConnectEvent>();
+		WindowsConnectEvent* connectEvent = cnew<WindowsConnectEvent>();
 		connectEvent->SetOwner(shared_from_this());
 
 		RegisterConnect(connectEvent, targetAddress);
@@ -69,7 +69,7 @@ namespace servercore
 		if (_isConnected.load() == false || _isDisconnectPosted.exchange(true))
 			return;
 
-		DisconnectEvent* disconnectEvent = cnew< DisconnectEvent>();
+		WindowsDisconnectEvent* disconnectEvent = cnew< WindowsDisconnectEvent>();
 		disconnectEvent->SetOwner(shared_from_this());
 
 		RegisterDisconnect(disconnectEvent);
@@ -96,7 +96,7 @@ namespace servercore
 		return true;
 	}
 
-	void Session::Dispatch(NetworkEvent* networkEvent, bool successed, int32 errorCode, int32 numOfBytes)
+	void Session::Dispatch(INetworkEvent* networkEvent, bool successed, int32 errorCode, int32 numOfBytes)
 	{
 		//	GQCS Failed
 		if (successed == false)
@@ -117,12 +117,12 @@ namespace servercore
 				//	ConnectEx Successed
 			case NetworkEventType::Connect:
 				assert(networkEvent->GetOwner() == session);
-				ProcessConnect(static_cast<ConnectEvent*>(networkEvent), numOfBytes);
+				ProcessConnect(static_cast<WindowsConnectEvent*>(networkEvent), numOfBytes);
 				break;
 				//	DisconnectEx Successed
 			case NetworkEventType::Disconnect:
 				assert(networkEvent->GetOwner() == session);
-				ProcessDisconnect(static_cast<DisconnectEvent*>(networkEvent), numOfBytes);
+				ProcessDisconnect(static_cast<WindowsDisconnectEvent*>(networkEvent), numOfBytes);
 				break;
 
 				//	Peer�� shutdown() or closesocket() ���� ����
@@ -146,13 +146,13 @@ namespace servercore
 				//	Data Recv 
 			case NetworkEventType::Recv:
 				assert(networkEvent->GetOwner() == session);
-				ProcessRecv(static_cast<RecvEvent*>(networkEvent), numOfBytes);
+				ProcessRecv(static_cast<WindowsRecvEvent*>(networkEvent), numOfBytes);
 				break;
 
 				//	Data Send
 			case NetworkEventType::Send:
 				assert(networkEvent->GetOwner() == session);
-				ProcessSend(static_cast<SendEvent*>(networkEvent), numOfBytes);
+				ProcessSend(static_cast<WindowsSendEvent*>(networkEvent), numOfBytes);
 				break;
 
 				//	???
@@ -163,7 +163,7 @@ namespace servercore
 		}
 	}
 
-	void Session::RegisterConnect(ConnectEvent* connectEvent, NetworkAddress& targetAddress)
+	void Session::RegisterConnect(WindowsConnectEvent* connectEvent, NetworkAddress& targetAddress)
 	{
 		DWORD bytesSent = 0;
 		auto success = NetworkUtils::S_ConnectEx(_socket, reinterpret_cast<const sockaddr*>(&targetAddress), sizeof(sockaddr_in),
@@ -182,7 +182,7 @@ namespace servercore
 		}
 	}
 
-	void Session::RegisterDisconnect(DisconnectEvent* disconnectEvent)
+	void Session::RegisterDisconnect(WindowsDisconnectEvent* disconnectEvent)
 	{
 		auto success = NetworkUtils::S_DisconnectEx(_socket, static_cast<LPOVERLAPPED>(disconnectEvent), TF_REUSE_SOCKET, 0);
 
@@ -207,7 +207,7 @@ namespace servercore
 		if (_isConnected.load() == false)
 			return;
 
-		RecvEvent* recvEvent = cnew<RecvEvent>();
+		WindowsRecvEvent* recvEvent = cnew<WindowsRecvEvent>();
 		recvEvent->SetOwner(shared_from_this());
 
 		WSABUF wsaBuf;
@@ -232,7 +232,7 @@ namespace servercore
 
 	void Session::RegisterSend()
 	{
-		SendEvent* sendEvent = cnew<SendEvent>();
+		WindowsSendEvent* sendEvent = cnew<WindowsSendEvent>();
 		sendEvent->SetOwner(shared_from_this());
 
 		if (_isConnected.load() == false)
@@ -271,14 +271,6 @@ namespace servercore
 				sendEvent->GetSendContexts().clear();
 				cdelete(sendEvent);
 				_isSending.store(false);
-
-				{
-					//	TODO
-					WriteLockGuard lock(_lock);
-					while (_sendContextQueue.empty() == false)
-						_sendContextQueue.pop();
-				}
-
 				Disconnect();
 			}
 		}
@@ -297,7 +289,7 @@ namespace servercore
 	}
 
 	//	Client에서 ConnectEx로 연결된 서버 후처리
-	void Session::ProcessConnect(ConnectEvent* connectEvent, int32 numOfBytes)
+	void Session::ProcessConnect(WindowsConnectEvent* connectEvent, int32 numOfBytes)
 	{
 		//	ConnectEx 요청없이 들어왔따??
 		if (_isConnectPending.exchange(false) == false)
@@ -333,7 +325,7 @@ namespace servercore
 		cdelete(connectEvent);
 	}
 
-	void Session::ProcessDisconnect(DisconnectEvent* disconnectEvent, int32 numOfBytes)
+	void Session::ProcessDisconnect(WindowsDisconnectEvent* disconnectEvent, int32 numOfBytes)
 	{
 		_isConnected.store(false);
 
@@ -347,7 +339,7 @@ namespace servercore
 		cdelete(disconnectEvent);
 	}
 
-	void Session::ProcessRecv(RecvEvent* recvEvent, int32 numOfBytes)
+	void Session::ProcessRecv(WindowsRecvEvent* recvEvent, int32 numOfBytes)
 	{
 		cdelete(recvEvent);
 
@@ -399,7 +391,7 @@ namespace servercore
 		RegisterRecv();
 	}
 
-	void Session::ProcessSend(SendEvent* sendEvent, int32 numOfBytes)
+	void Session::ProcessSend(WindowsSendEvent* sendEvent, int32 numOfBytes)
 	{
 		sendEvent->GetSendContexts().clear();
 		cdelete(sendEvent);
@@ -422,7 +414,7 @@ namespace servercore
 			NetworkUtils::CloseSocket(_socket);
 	}
 
-	void Session::HandleError(NetworkEvent* networkEvent, int32 errorCode)
+	void Session::HandleError(INetworkEvent* networkEvent, int32 errorCode)
 	{
 		if (networkEvent->GetNetworkEventType() == NetworkEventType::Send)
 			_isSending.store(false);

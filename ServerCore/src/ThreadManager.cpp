@@ -114,7 +114,7 @@ namespace servercore
 		ShutdownThreadPool();
 	}
 
-	void ThreadManager::Launch(std::function<void(void)> callback, const std::string& threadName,  bool repeat)
+	void ThreadManager::Launch(std::function<void()> callback, const std::string& threadName,  bool repeat)
 	{
 		if (_stopped.load() == true)
 			return;

@@ -2,6 +2,8 @@
 #include "Acceptor.hpp"
 #include "ServerCore.hpp"
 #include "Session.hpp"
+#include "WindowsIocpNetwork.hpp"
+
 
 namespace servercore
 {
@@ -33,7 +35,7 @@ namespace servercore
 			return false;
 		}
 
-		if (_iocpCore->Register(shared_from_this()) == false)
+		if (_networkDispatcher->Register(shared_from_this()) == false)
 		{
 			_serverCore->HandleError(__FUNCTION__, __LINE__, "_iocpCore->Register() : ", ::WSAGetLastError());
 			NetworkUtils::CloseSocket(_listenSocket);
@@ -75,9 +77,9 @@ namespace servercore
 		NetworkUtils::CloseSocket(_listenSocket);
 	}
 
-	void Acceptor::Dispatch(NetworkEvent* networkEvent, bool successed, int32 errorCode, int32 numOfBytes)
+	void Acceptor::Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode, int32 numOfBytes)
 	{
-		AcceptEvent* acceptEvent = static_cast<AcceptEvent*>(networkEvent);
+		WindowsAcceptEvent* acceptEvent = static_cast<WindowsAcceptEvent*>(networkEvent);
 		assert(acceptEvent->GetNetworkEventType() == NetworkEventType::Accept);
 		assert(acceptEvent->GetOwnerAcceptor().get() == this);	//	TODO
 
@@ -90,7 +92,7 @@ namespace servercore
 		}
 
 		//	GQCS Successed 
-		if (successed)
+		if (succeeded)
 			ProcessAccept(acceptEvent);
 		//	AcceptEx GQCS Failed
 		else
@@ -116,7 +118,7 @@ namespace servercore
 			return;
 		}
 
-		AcceptEvent* acceptEvent = cnew<AcceptEvent>();
+		WindowsAcceptEvent* acceptEvent = cnew<WindowsAcceptEvent>();
 		acceptEvent->SetOwner(shared_from_this());
 		acceptEvent->SetAcceptSocket(acceptedSocket);
 
@@ -143,7 +145,7 @@ namespace servercore
 		}
 	}
 
-	void Acceptor::ProcessAccept(AcceptEvent* acceptEvent)
+	void Acceptor::ProcessAccept(WindowsAcceptEvent* acceptEvent)
 	{
 		if (NetworkUtils::SetUpdateAcceptSocket(acceptEvent->GetAcceptSocket(), _listenSocket) == false)
 		{
@@ -173,7 +175,7 @@ namespace servercore
 		newSession->SetSocket(acceptEvent->GetAcceptSocket());
 		newSession->SetRemoteAddress(remoteAddress);
 		
-		if (_iocpCore->Register(std::static_pointer_cast<IocpObject>(newSession)) == false)
+		if (_networkDispatcher->Register(std::static_pointer_cast<INetworkObject>(newSession)) == false)
 		{
 			_serverCore->HandleError(__FUNCTION__, __LINE__, "_iocpCore->Register() : ", ::WSAGetLastError());
 			cdelete(acceptEvent);

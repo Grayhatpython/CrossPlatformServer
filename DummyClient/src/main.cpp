@@ -13,6 +13,70 @@ struct TestPacket : PacketHeader
 
 
 #if defined(PLATFORM_WINDOWS)
+class ParallelSessionSend
+{
+public:
+    void ProcessParallelSend(const std::vector< std::shared_ptr<servercore::Session>>& serverSesions, int32 threadCount)
+    {
+        std::vector<std::thread> workerThreads;
+        workerThreads.reserve(threadCount);
+
+        const auto sessionsCount = serverSesions.size();
+        const auto sessionCountPerThread = sessionsCount / threadCount;
+        const auto remainSessionCount = sessionsCount % threadCount;
+
+        size_t currentIndex = 0;
+
+        for (int32_t i = 0; i < threadCount; i++)
+        {
+            size_t rangeSize = sessionCountPerThread + (i < remainSessionCount ? 1 : 0);
+            if (rangeSize == 0)
+                continue;
+
+            const size_t rangeStart = currentIndex;
+            const size_t rangeEnd = rangeStart + rangeSize;
+            currentIndex = rangeEnd;
+
+            servercore::GThreadManager->Launch([&serverSesions, rangeStart, rangeEnd]() {
+                    for (auto j = rangeStart; j < rangeEnd; j++)
+                    {
+                        const auto& session = serverSesions[j];
+                        if (session == nullptr)
+                            continue;
+
+                        // 1. SendBuffer 할당
+                        auto segment = servercore::SendBufferArena::Allocate(sizeof(TestPacket));
+
+                        // 2. 할당 성공 여부 명시적 확인 (assert 대체)
+                        if (segment->successed == false) {
+                            // 실무: 메모리 풀 고갈 상황에 대한 로그 및 통계 처리
+                            std::cerr << "SendBuffer allocation failed for session: " << session->GetSessionId() << ". Skipping." << std::endl;
+                            continue; // 이 세션에 대한 전송은 건너뜀
+                        }
+
+                        std::cout << "Test" << std::endl;
+
+                        // 3. 패킷 구성
+                        TestPacket* testPacket = reinterpret_cast<TestPacket*>(segment->ptr);
+                        testPacket->id = 3;
+                        testPacket->playerId = 3;
+                        testPacket->playerMp = 6;
+                        testPacket->size = sizeof(TestPacket);
+
+                        // 4. SendContext 생성 및 전송 요청
+                        auto sendContext = std::make_shared<servercore::SendContext>();
+                        sendContext->sendBuffer = segment->sendBuffer;
+                        sendContext->wsaBuf.buf = reinterpret_cast<CHAR*>(segment->ptr);
+                        sendContext->wsaBuf.len = static_cast<ULONG>(sizeof(TestPacket));
+
+                        session->Send(sendContext);
+                    }
+
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                });
+        }
+    }
+};
 
 int main()
 {
@@ -23,35 +87,16 @@ int main()
             return servercore::MakeShared<ServerSession>();
             };
 
-        std::shared_ptr<servercore::ClinetService> client = std::make_shared<servercore::ClinetService>(2, sessionFactory);      
+        std::shared_ptr<servercore::ClinetService> client = std::make_shared<servercore::ClinetService>(1, sessionFactory);      
         std::vector< std::shared_ptr<servercore::Session>> serverSessions;
         auto session = client->Connect(servercore::NetworkAddress("127.0.0.1", 8888), 1, serverSessions);
 
+        ParallelSessionSend pss;
+        pss.ProcessParallelSend(serverSessions, 1);
+
         while (true)
         {
-            //  패킷생성해서 Send 테스트..
-            //  좀 사용하기 난잡하고 가변 길이 처리도 안됨.. 
-            //  수정필요
-            auto segment = servercore::SendBufferArena::Allocate(sizeof(TestPacket));
-            if (segment->successed == false)
-                assert(false);  //  ???
-
-            TestPacket* testPacket = reinterpret_cast<TestPacket*>(segment->ptr);
-            testPacket->id = 3;
-            testPacket->playerId = 3;
-            testPacket->playerMp = 6;
-            testPacket->size = sizeof(TestPacket);
-
-            auto sendContext = std::make_shared<servercore::SendContext>();
-            sendContext->sendBuffer = segment->sendBuffer;
-            sendContext->wsaBuf.buf = reinterpret_cast<CHAR*>(segment->ptr);
-            sendContext->wsaBuf.len = static_cast<ULONG>(sizeof(TestPacket));
-
-
-            for (auto& serverSession : serverSessions)
-                serverSession->Send(sendContext);
-
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            ;
         }
     }
     return 0;

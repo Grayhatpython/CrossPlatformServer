@@ -1,12 +1,13 @@
 #pragma once
 #include "StreamBuffer.hpp"
+#include "NetworkInterface.hpp"
 
 namespace servercore
 {
 	class IocpCore;
 	class ServerCore;
 
-	class Session : public IocpObject
+	class Session : public INetworkObject
 	{
 		friend class Acceptor;
 		friend class ServerCore;
@@ -23,7 +24,7 @@ namespace servercore
 
 	public:
 		virtual HANDLE GetHandle() override { return reinterpret_cast<HANDLE>(_socket); }
-		virtual void Dispatch(NetworkEvent* networkEvent, bool successed, int32 errorCode, int32 numOfBytes) override;
+		virtual void Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode, int32 numOfBytes) override;
 
 	public:
 		virtual		void OnConnected() {};
@@ -32,26 +33,26 @@ namespace servercore
 		virtual		void OnSend() {};
 
 	private:
-		void		RegisterConnect(ConnectEvent* connectEvent, NetworkAddress& targetAddress);
-		void		RegisterDisconnect(DisconnectEvent* disconnectEvent);
+		void		RegisterConnect(WindowsConnectEvent* connectEvent, NetworkAddress& targetAddress);
+		void		RegisterDisconnect(WindowsDisconnectEvent* disconnectEvent);
 		void		RegisterRecv();
 		void		RegisterSend();
 
 		void		ProcessConnect();
-		void		ProcessConnect(ConnectEvent* connectEvent, int32 numOfBytes);
-		void		ProcessDisconnect(DisconnectEvent* disconnectEvent, int32 numOfBytes);
-		void		ProcessRecv(RecvEvent* recvEvent, int32 numOfBytes);
-		void		ProcessSend(SendEvent* sendEvent, int32 numOfBytes);
+		void		ProcessConnect(WindowsConnectEvent* connectEvent, int32 numOfBytes);
+		void		ProcessDisconnect(WindowsDisconnectEvent* disconnectEvent, int32 numOfBytes);
+		void		ProcessRecv(WindowsRecvEvent* recvEvent, int32 numOfBytes);
+		void		ProcessSend(WindowsSendEvent* sendEvent, int32 numOfBytes);
 
 		void		CloseSocket();
 
-		void		HandleError(NetworkEvent* networkEvent, int32 errorCode);
+		void		HandleError(INetworkEvent* networkEvent, int32 errorCode);
 
 	public:
-		void						SetServerCore(std::shared_ptr<ServerCore> serverCore) { _serverCore = serverCore; }
-		std::shared_ptr<ServerCore>	GetServerCore() { return _serverCore; }
-		void						SetIocpCore(std::shared_ptr<IocpCore> iocpCore) { _iocpCore = iocpCore; }
-		std::shared_ptr<IocpCore>	GetIocpCore() { return _iocpCore; }
+		void								SetServerCore(std::shared_ptr<ServerCore> serverCore) { _serverCore = serverCore; }
+		std::shared_ptr<ServerCore>			GetServerCore() { return _serverCore; }
+		void								SetNetworkDispatcher(std::shared_ptr<INetworkDispatcher> networkDispatcher) { _networkDispatcher = networkDispatcher; }
+		std::shared_ptr<INetworkDispatcher>	GetNetworkDispatcher() { return _networkDispatcher; }
 
 		void				SetSocket(SOCKET socket) { _socket = socket; }
 		SOCKET&				GetSocket() { return _socket; }
@@ -69,8 +70,8 @@ namespace servercore
 		uint64 _sessionId = 0;
 
 		NetworkAddress _remoteAddres{};
-		std::shared_ptr<IocpCore> _iocpCore;
-		std::shared_ptr<ServerCore> _serverCore;
+		std::shared_ptr<INetworkDispatcher>  _networkDispatcher;
+		std::shared_ptr<ServerCore>			 _serverCore;
 
 		std::atomic<bool> _isConnected = false;
 		std::atomic<bool> _isConnectPending = false;

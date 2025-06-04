@@ -1,15 +1,6 @@
 #pragma once
 
-
-
-// _WIN32 , _WIN64 매크로는 MSVC 컴파일러가 Windows용으로 컴파일할 때 자동으로 정의됩니다.
-#if defined(_WIN32) || defined(_WIN64)
-    #define PLATFORM_WINDOWS
-#elif defined(__linux__)
-    #define PLATFORM_LINUX
-#else
-    #error "지원하지 않는 플랫폼"
-#endif
+#include "Platform.hpp"
 
 // -----------------------------------------------------
 // 운영체제별 헤더 및 매크로 정의
@@ -51,10 +42,6 @@
     #include <sys/syscall.h>
     #include <cerrno>
 
-    using SOCKET = int;
-    constexpr int INVALID_SOCKET = -1;
-    constexpr int SOCKET_ERROR = -1;
-
 #endif
 
 #include <map>
@@ -83,7 +70,6 @@
 #include <cassert>
 
 // 타입 정의 헤더 파일 
-#include "Types.hpp"    
 #include "Enums.hpp"
 #include "ThreadLocal.hpp"
 

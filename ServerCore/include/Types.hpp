@@ -13,7 +13,10 @@ using BYTE = unsigned char;
 	using uint16 = unsigned __int16;
 	using uint32 = unsigned __int32;
 	using uint64 = unsigned __int64;
-#else
+
+	constexpr uint32 TIMEOUT_INFINITE = INFINITE;
+
+#elif defined(PLATFORM_LINUX)
 	using int8 = int8_t;
 	using int16 = int16_t;
 	using int32 = int32_t;
@@ -22,4 +25,15 @@ using BYTE = unsigned char;
 	using uint16 = uint16_t;
 	using uint32 = uint32_t;
 	using uint64 = uint64_t;
+	using SOCKET = int;
+
+	constexpr uint32 TIMEOUT_INFINITE = UINT32_MAX;
+	constexpr int INVALID_SOCKET = -1;
+	constexpr int SOCKET_ERROR = -1;
+
+	inline int GetLastErrorCode()
+	{
+		return errno;
+	}
+
 #endif
