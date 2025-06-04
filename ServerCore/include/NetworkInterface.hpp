@@ -30,12 +30,12 @@ namespace servercore
 		virtual ~INetworkObject() = default;
 
 #if defined(PLATFORM_WINDOWS)
-		virtual HANDLE GetHandle() abstract;
+		virtual HANDLE GetHandle()  = 0;
 #elif defined(PLATFORM_LINUX)
-		virtual int GetHandle() abstract;
+		virtual int GetHandle() = 0;
 #endif
 
-		virtual void Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode, int32 numOfBytes = 0) abstract;
+		virtual void Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode, int32 numOfBytes = 0)  = 0;
 	};
 
 	class INetworkDispatcher
@@ -44,9 +44,9 @@ namespace servercore
 		virtual ~INetworkDispatcher() = default;
 
 	public:
-		virtual bool Register(std::shared_ptr<INetworkObject> networkObject) abstract;
-		virtual DispatchResult Dispatch(uint32 timeoutMs = TIMEOUT_INFINITE) abstract;
-		virtual void PostExitSignal() abstract;
+		virtual bool Register(std::shared_ptr<INetworkObject> networkObject)  = 0;
+		virtual DispatchResult Dispatch(uint32 timeoutMs = TIMEOUT_INFINITE)  = 0;
+		virtual void PostExitSignal()  = 0;
 	};
 
 	class SendBuffer;

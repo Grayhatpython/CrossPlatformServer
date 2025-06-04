@@ -1,7 +1,7 @@
 #include "Pch.hpp"
 #include "NetworkAddress.hpp"
 
-namespace servercore
+namespace ServerCore
 {
 	NetworkAddress::NetworkAddress(const struct sockaddr_in& address)
 		: _address(address)

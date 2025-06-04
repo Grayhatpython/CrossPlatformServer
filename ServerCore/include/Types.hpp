@@ -26,14 +26,13 @@ using BYTE = unsigned char;
 	using uint32 = uint32_t;
 	using uint64 = uint64_t;
 	using SOCKET = int;
+	using HANDLE = int;
+	using FileDescriptor = int;
 
 	constexpr uint32 TIMEOUT_INFINITE = UINT32_MAX;
-	constexpr int INVALID_SOCKET = -1;
-	constexpr int SOCKET_ERROR = -1;
-
-	inline int GetLastErrorCode()
-	{
-		return errno;
-	}
+	constexpr SOCKET INVALID_SOCKET = -1;
+	constexpr SOCKET SOCKET_ERROR = -1;
+	constexpr HANDLE INVALID_HANDLE_VALUE = -1;
+	constexpr FileDescriptor INVALID_FILE_DESCRIPTOR_VALUE = -1;
 
 #endif

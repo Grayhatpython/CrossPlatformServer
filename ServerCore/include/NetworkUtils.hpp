@@ -19,6 +19,7 @@ namespace servercore
 		static bool		Listen(SOCKET socket, int32 backlog = SOMAXCONN);
 
 	public:
+		static void 	SetNonBlocking(SOCKET socket);
 		static bool		SetLinger(SOCKET socket, uint16 onoff, uint16 linger);
 		static bool		SetReuseAddress(SOCKET socket, bool flag);
 		static bool		SetTcpNoDelay(SOCKET socket, bool flag);

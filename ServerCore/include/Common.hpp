@@ -31,6 +31,7 @@
 
     // Linux/Unix 소켓 프로그래밍에 필요한 표준 헤더 파일들입니다.
     #include <sys/socket.h>     // 소켓 관련 기본 함수 (socket, bind, listen, accept, connect 등)
+    #include <sys/epoll.h>      // epoll
     #include <netinet/in.h>     // 인터넷 주소 구조체 (sockaddr_in, sockaddr_in6) 및 상수 (IPPROTO_TCP 등)
     #include <netinet/tcp.h>    // TCP_NODELAY
     #include <arpa/inet.h>      // IP 주소 변환 함수 (inet_pton, inet_ntop 등)
@@ -40,7 +41,8 @@
 
     #include <sys/types.h>      // 다양한 데이터 타입 정의
     #include <sys/syscall.h>
-    #include <cerrno>
+    #include <cerrno>           // errno
+    #include <csignal>          // signal
 
 #endif
 

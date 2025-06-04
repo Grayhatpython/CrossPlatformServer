@@ -11,7 +11,10 @@ namespace servercore
 		bool OnRead(int32 numOfBytes);
 		bool OnWrite(int32 numOfBytes);
 		void Clean();
+		#if defined(PLATFORM_WINDOWS)
 		void PrepareWSARecvWsaBuf(WSABUF& wsaBuf);
+		#elif defined(PLATFORM_LINUX)
+		#endif
 
 	public:
 		int32 GetReadableSize() const { return _writePos - _readPos; }
