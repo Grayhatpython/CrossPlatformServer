@@ -99,8 +99,8 @@ namespace servercore
     class LinuxEpollObject : public INetworkObject
     {
     public:
-        virtual HANDLE GetHandle() = 0;
-        virtual void Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode, int32 numOfBytes = 0) = 0;
+	    virtual FileDescriptor GetFileDescriptor() override;
+        virtual void Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode, int32 numOfBytes = 0) override;
     };
 
     class LinuxEpollDispatcher : public INetworkDispatcher
@@ -120,6 +120,9 @@ namespace servercore
 		virtual bool Register(std::shared_ptr<INetworkObject> networkObject) override;
 		virtual DispatchResult Dispatch(uint32 timeoutMs = TIMEOUT_INFINITE) override;
 		virtual void PostExitSignal() override;
+
+    public:
+        void UnRegister(std::shared_ptr<INetworkObject> networkObject);
 
     public:
         FileDescriptor GetFileDescriptor() { return _epoll; }

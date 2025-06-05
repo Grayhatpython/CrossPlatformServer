@@ -7,6 +7,7 @@
 
 namespace servercore
 {
+#if defined(PLATFORM_WINDOWS)
 	Acceptor::Acceptor()
 	{
 
@@ -19,7 +20,7 @@ namespace servercore
 
 	bool Acceptor::Start(uint16 port, int32 backlog)
 	{
-		//	listenSocketÀÌ ÀÌ¹Ì ÀÖ´Â °æ¿ì -> ÀÏ´ÜÀº ½ÇÆÐ
+		//	listenSocketï¿½ï¿½ ï¿½Ì¹ï¿½ ï¿½Ö´ï¿½ ï¿½ï¿½ï¿½ -> ï¿½Ï´ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 		if (_listenSocket != INVALID_SOCKET)
 		{
 			assert(false);
@@ -69,7 +70,7 @@ namespace servercore
 		return true;
 	}
 
-	void Acceptor::Close()
+	void Acceptor::Stop()
 	{
 		if (_isClosed.exchange(true) == true)
 			return;
@@ -187,4 +188,118 @@ namespace servercore
 		//	TODO
 		newSession->ProcessConnect();
 	}
+#elif defined(PLATFORM_LINUX)
+	Acceptor::Acceptor()
+	{
+
+	}
+
+	Acceptor::~Acceptor() 
+	{
+
+	}
+
+	bool Acceptor::Start(uint16 port, int32 backlog = SOMAXCONN)
+	{
+		if (_listenSocket != INVALID_SOCKET)
+		{
+			assert(false);
+			return false;
+		}
+
+		//	Overlapped Socket
+		_listenSocket = NetworkUtils::CreateSocket(true);
+		if (_listenSocket == INVALID_SOCKET)
+		{
+			return false;
+		}
+
+		if (_networkDispatcher->Register(shared_from_this()) == false)
+		{
+			NetworkUtils::CloseSocket(_listenSocket);
+			return false;
+		}
+
+		if (NetworkUtils::SetReuseAddress(_listenSocket, true) == false)
+		{
+			NetworkUtils::CloseSocket(_listenSocket);
+			return false;
+		}
+
+		if (NetworkUtils::Bind(_listenSocket, port) == false)
+		{
+			NetworkUtils::CloseSocket(_listenSocket);
+			return false;
+		}
+
+		if (NetworkUtils::Listen(_listenSocket, backlog) == false)
+		{
+			NetworkUtils::CloseSocket(_listenSocket);
+			return false;
+		}
+
+		return true;
+	}
+
+	void Acceptor::Stop()
+	{
+		auto linuxEpollDispatcher = std::static_pointer_cast<LinuxEpollDispatcher>(_networkDispatcher);
+		if(linuxEpollDispatcher->UnRegister(shared_from_this()) == false)
+			;	//	???
+
+		NetworkUtils::CloseSocket(_listenSocket);
+	}
+
+	void Acceptor::Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode, int32 numOfBytes)
+	{
+		if(networkEvent->GetNetworkEventType() == NetworkEventType::Accept)
+			ProcessAccept();
+		else
+			;	//	???
+	}
+
+	void Acceptor:: ProcessAccept()
+	{
+		struct sockaddr_in address;
+		socklen_t addrLen = sizeof(address);
+
+		while(true)
+		{
+			SOCKET clientSocket = ::accept(_listenSocket, (struct sockaddr*)&address, &addrLen);
+			if(clientSocket == INVALID_SOCKET)
+			{
+				//	ë” ì´ìƒ ì—°ê²° ìš”ì²­ ì—†ìŒ
+				if(errno == EAGAIN || errno == EWOULDBLOCK)
+					break;
+				//	ì‹œìŠ¤í…œ ì½œ ì¸í„°ëŸ½íŠ¸, ìž¬ì‹œë„
+				else if(errno == EINTR)
+					continue;
+
+				///	???	ê·¸ ì™¸ ì˜¤ë¥˜
+				break;
+			}
+
+			NetworkAddress remoteAddress(address);
+
+			auto newSession = _serverCore->CreateSession();
+			assert(newSession);
+			
+			//	TODO
+			NetworkUtils::SetNonBlocking(clientSocket);
+
+			newSession->SetSocket(clientSocket);
+			newSession->SetRemoteAddress(remoteAddress);
+			
+			if (_networkDispatcher->Register(std::static_pointer_cast<INetworkObject>(newSession)) == false)
+			{
+				return;
+			}
+
+			_serverCore->AddSession(newSession);
+
+			//	TODO
+			newSession->ProcessConnect();
+		}
+	}
+#endif
 }

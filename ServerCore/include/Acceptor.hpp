@@ -3,10 +3,11 @@
 
 namespace servercore
 {
+#if defined(PLATFORM_WINDOWS)
 	class INetworkDispatcher;
 	class ServerCore;
 
-	class Acceptor : public INetworkObject
+	class Acceptor : public WindowsIocpObject
 	{
 		friend class ServerCore;
 
@@ -16,7 +17,7 @@ namespace servercore
 
 	public:
 		bool	Start(uint16 port, int32 backlog = SOMAXCONN);
-		void	Close();
+		void	Stop();
 
 	public:
 		virtual void	Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode, int32 numOfBytes) override;
@@ -44,4 +45,38 @@ namespace servercore
 			//	TODO
 		int32									_concurrentAcceptCount = 1;
 	};
+#elif defined(PLATFORM_LINUX)
+	class ServerCore;
+	class INetworkDispatcher;
+
+	class Acceptor : public LinuxEpollObject
+	{
+	public:
+		Acceptor();
+		virtual ~Acceptor() override;
+
+	public:
+		bool Start(uint16 port, int32 backlog = SOMAXCONN);
+		void Stop();
+
+	public:
+		virtual NetworkObjectType GetNetworkObjectType() const override { return NetworkObjectType::Acceptor; }
+		virtual FileDescriptor GetFileDescriptor() override { return _listenSocket; } 
+		virtual void Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode, int32 numOfBytes) override;
+
+	private:
+		void ProcessAccept();
+
+	public:
+		void									SetServerCore(std::shared_ptr<ServerCore> serverCore) { _serverCore = serverCore; }
+		std::shared_ptr<ServerCore>				GetServerCore() { return _serverCore; }
+		void									SetNetworkDispatcher(std::shared_ptr<INetworkDispatcher> networkDispatcher) { _networkDispatcher = networkDispatcher; }
+		std::shared_ptr<INetworkDispatcher>		GetNetworkDispatcher() { return _networkDispatcher; }
+
+	private:
+		SOCKET									_listenSocket = INVALID_SOCKET;
+		std::shared_ptr<ServerCore> 			_serverCore;
+		std::shared_ptr<INetworkDispatcher> 	_networkDispatcher;
+	};
+#endif
 }

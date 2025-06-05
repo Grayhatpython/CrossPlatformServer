@@ -2,10 +2,16 @@
 #include "ServerCore.hpp"
 #include "Acceptor.hpp"
 #include "Session.hpp"
+
+#if defined(PLATFORM_WINDOWS)
 #include "WindowsIocpNetwork.hpp"
+#elif defined(PLATFORM_LINUX)
+#include "LinuxEpollNetwork.hpp"
+#endif
 
 namespace servercore
 {
+#if defined(PLATFORM_WINDOWS)
 	ServerCore::ServerCore(int32 workerThreadCount, std::function<std::shared_ptr<Session>()> sessionFactory)
 		: _sessionFactory(sessionFactory)
 	{
@@ -16,8 +22,8 @@ namespace servercore
 		_networkDispatcher = std::make_shared<WindowsIocpDispatcher>();
 	}
 
-	ServerCore::~ServerCore()
-	{
+    ServerCore::~ServerCore()
+    {
 		Stop();
 		NetworkUtils::Clear();
 	}
@@ -212,7 +218,7 @@ namespace servercore
 	{
 		//	acceptor clear
 		if (_acceptor)
-			_acceptor->Close();	//	TODO
+			_acceptor->Stop();	//	TODO
 
 		//	acceptor clear wait 
 		std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -269,4 +275,103 @@ namespace servercore
 
 		return true;
 	}
+#elif defined(PLATFORM_LINUX)
+
+    ServerCore::ServerCore()
+    {
+
+    }
+
+	ServerCore::~ServerCore()
+    {
+		Stop();
+    }
+
+	bool ServerCore::Initialize()
+	{
+		_networkDispatcher = std::make_shared<LinuxEpollDispatcher>();
+		if(_networkDispatcher == nullptr)
+			return false;
+
+		_acceptor = std::make_shared<Acceptor>();
+		if(_acceptor == nullptr)
+			return false;
+
+		return true;
+	}
+
+	bool ServerCore::Start(NetworkAddress& listenAddress)
+	{
+		if(_acceptor == nullptr)
+			return false;
+
+		_isRunning.store(true);
+		return true;
+	}
+
+	void ServerCore::Stop()
+	{
+		for(auto& workerThread : _workerThreads)
+		{
+			if(workerThread.joinable())
+			workerThread.join();
+		}
+		_workerThreads.clear();
+
+		_isRunning.store(false);
+	}
+
+	bool ServerCore::StartWorkerThread(uint32 threadCount)
+	{
+
+	}
+
+
+	void ServerCore::HandleError(const char* func, int32 lineNumber, const std::string& message, int32 systemErrorCode) 
+	{
+		std::cerr << "[ERROR] Func: " << func << " | Line: " << lineNumber << " | Msg: " << message;
+		if (systemErrorCode != 0) 
+		{
+			std::cerr << " | Code: " << systemErrorCode << " (0x" << std::hex << systemErrorCode << std::dec << ")";
+			const char* systemErrorMessage = ::strerror(systemErrorCode);
+			if (systemErrorMessage != nullptr && std::strlen(systemErrorMessage) > 0) 
+				std::cerr << " (" << systemErrorMessage << ")";
+		}
+		std::cerr << "\n";
+	}
+
+	void ServerCore::HandleError(const char* func, int32 lineNumber, const std::string& message, ErrorCode customErrorCode) 
+	{
+		std::cerr << "[ERROR] Func: " << func << " | Line: " << lineNumber << " | Msg: " << message;
+		if (customErrorCode != ErrorCode::Success) 
+		{
+			std::cerr << " | Code: " << static_cast<int32>(customErrorCode) << " (0x" << std::hex << static_cast<int32>(customErrorCode) << std::dec << ")";
+			// 여기에 customErrorCode에 대한 문자열 메시지를 반환하는 함수 호출
+			// 예: std::cerr << " (" << GetCustomErrorMessage(customErrorCode) << ")";
+		}
+		std::cerr << "\n";
+	}
+
+	std::shared_ptr<Session> ServerCore::CreateSession()
+	{
+		return std::shared_ptr<Session>();
+	}
+
+	void ServerCore::AddSession(std::shared_ptr<Session> session)
+	{
+
+	}
+
+	void ServerCore::RemoveSession(std::shared_ptr<Session> session)
+	{
+
+	}
+
+	void ServerCore::WorkerThread()
+	{
+
+	}
+
+
+#endif
 }

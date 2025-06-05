@@ -3,6 +3,7 @@
 
 namespace servercore
 {
+#if defined(PLATFORM_WINDOWS)
 	class Session;
 	class Acceptor;
 	class INetworkDispatcher;
@@ -85,4 +86,50 @@ namespace servercore
 		bool Connect(NetworkAddress& targetAddress, int32 connectionCount, std::vector<std::shared_ptr<Session>>& sessions);
 
 	};
+#elif defined(PLATFORM_LINUX)
+	class Session;
+	class Acceptor;
+	class INetworkDispatcher;
+
+	class ServerCore : public std::enable_shared_from_this<ServerCore>
+	{
+	public:
+		ServerCore();
+		~ServerCore();
+
+	public:
+		bool Initialize();
+		bool Start(NetworkAddress& listenAddress);
+		void Stop();
+
+		bool StartWorkerThread(uint32 threadCount);
+
+		void HandleError(const char* func, int32 lineNumber, const std::string& message, int32 systemErrorCode);
+		void HandleError(const char* func, int32 lineNumber, const std::string& message, ErrorCode customErrorCode);
+
+	public:
+		//	TEMP
+		std::shared_ptr<Session> CreateSession();
+		
+		void AddSession(std::shared_ptr<Session> session);
+		void RemoveSession(std::shared_ptr<Session> session);
+
+	private:
+		void WorkerThread();	
+
+	public:
+		std::shared_ptr<INetworkDispatcher> GetNetworkDispatcher() { return _networkDispatcher; }
+		std::shared_ptr<Acceptor>			GetAcceptor() { return _acceptor; }
+
+	private:
+		std::shared_ptr<INetworkDispatcher> 		_networkDispatcher;
+		std::shared_ptr<Acceptor>					_acceptor;
+
+		std::vector<std::thread>					_workerThreads;
+		std::atomic<bool>							_isRunning = false;
+
+		std::map<uint64, std::shared_ptr<Session>> 	_sessions;
+		Lock										_lock;
+	};
+#endif
 }

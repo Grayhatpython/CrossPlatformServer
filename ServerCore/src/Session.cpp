@@ -5,6 +5,7 @@
 
 namespace servercore
 {
+#if defined(PLATFORM_WINDOWS)
 	std::atomic<uint64> Session::S_GenerateSessionId = 1;
 
 	Session::Session()
@@ -439,4 +440,145 @@ namespace servercore
 
 		cdelete(networkEvent);
 	}
+#elif defined(PLATFORM_LINUX)
+	std::atomic<uint64> Session::S_GenerateSessionId = 1;
+
+	Session::Session()
+	{
+		_sessionId = S_GenerateSessionId.fetch_add(1);
+	}
+
+	Session::~Session()
+	{
+		//	TEST
+		std::cout << "~Session" << std::endl;
+
+		CloseSocket();
+		
+		//	TEMP
+		while (_sendContextQueue.empty() == false)
+			_sendContextQueue.pop();
+	}
+
+	bool Session::Connect(NetworkAddress& targetAddress)
+	{
+		if (_isConnected.load() == true || _isConnectPending.load() == true)
+		{
+			assert(false);
+			return false;
+		}
+
+		_socket = NetworkUtils::CreateSocket(true);
+		if (_socket == INVALID_SOCKET)
+		{
+			return false;
+		}
+
+		if (NetworkUtils::Bind(_socket, static_cast<uint16>(0)) == false)
+		{
+			NetworkUtils::CloseSocket(_socket);
+			return false;
+		}
+
+		if (_networkDispatcher->Register(shared_from_this()) == false)
+		{
+			NetworkUtils::CloseSocket(_socket);
+			return false;
+		}
+
+		struct sockaddr_in serverAddress = targetAddress.GetSocketAddress();
+		_isConnectPending.store(true);
+
+		int32 error = ::connect(_socket, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
+		if(error < 0)
+		{
+			//	EINPROGRESS 경우 연결이 즉시 완료되지 않았지만, 백그라운드에서 진행 중
+			// 	이 경우 이후 epoll 등으로 EPOLLOUT 이벤트를 기다려 연결 완료를 감지
+			//	그 외 음수 값 (다른 errno): 연결 시도가 명백한 오류로 실패
+			if(errno != EINPROGRESS)
+			{
+				NetworkUtils::CloseSocket(_socket);
+				_isConnectPending.store(false);
+				return false;
+			}
+		}
+		else
+			//	바로 Connect
+			ProcessConnect();
+
+		return true;
+	}
+
+	void Session::Disconnect()
+	{
+		if (_isConnected.load() == false || _isDisconnectPosted.exchange(true))
+			return;
+
+		ProcessDisconnect();
+	}
+
+	bool Session::Send(std::shared_ptr<SendContext> sendContext)
+	{
+	
+	}
+
+	void Session::ProcessConnect()
+	{
+		int32 error = 0;
+		socklen_t len = sizeof(error);
+		if(::getsockopt(_socket, SOL_SOCKET, SO_ERROR, &error, &len) < 0 || error != 0)
+		{
+			CloseSocket();
+			_isConnectPending.store(false);
+			return;
+		}
+
+		_isConnected.store(true);
+		_isConnectPending.store(false);
+
+		struct sockaddr_in remoteAddress;
+		socklen_t addrLen = sizeof(remoteAddress);
+		if(::getpeername(_socket, (struct sockaddr*)&remoteAddress, &addrLen) == 0)
+			_remoteAddress = NetworkAddress(remoteAddress);
+
+		OnConnected();
+	}
+
+	void Session::ProcessDisconnect()
+	{
+		_isConnected.store(false);
+
+		OnDisconnected();
+
+		CloseSocket();
+		// _serverCore->RemoveSession(session);
+	}
+
+	void Session::ProcessRecv(int32 numOfBytes)
+	{
+
+	}
+
+	void Session::ProcessSend(int32 numOfBytes)
+	{
+
+	}
+
+	void Session::CloseSocket()
+	{
+		auto linuxEpollDispatcher = std::static_pointer_cast<LinuxEpollDispatcher>(_networkDispatcher);
+		if(linuxEpollDispatcher->UnRegister(shared_from_this()) == false)
+			;	//	???
+
+		SOCKET socket = _socket;
+		if (socket != INVALID_SOCKET)
+			NetworkUtils::CloseSocket(_socket);
+	}
+
+	void Session::Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode, int32 numOfBytes)
+	{
+		
+	}
+
+#endif
 }

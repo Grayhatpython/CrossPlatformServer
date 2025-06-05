@@ -29,7 +29,7 @@ using BYTE = unsigned char;
 	using HANDLE = int;
 	using FileDescriptor = int;
 
-	constexpr uint32 TIMEOUT_INFINITE = UINT32_MAX;
+	constexpr uint32 TIMEOUT_INFINITE = -1;
 	constexpr SOCKET INVALID_SOCKET = -1;
 	constexpr SOCKET SOCKET_ERROR = -1;
 	constexpr HANDLE INVALID_HANDLE_VALUE = -1;

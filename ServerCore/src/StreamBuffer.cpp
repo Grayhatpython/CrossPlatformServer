@@ -44,7 +44,7 @@ namespace servercore
 			_writePos = readableSize;
 		}
 	}
-
+#if defined(PLATFORM_WINDOWS)
 	void StreamBuffer::PrepareWSARecvWsaBuf(WSABUF& wsaBuf)
 	{
 		int32 writeableSize = GetWriteableSize();
@@ -60,4 +60,5 @@ namespace servercore
 		wsaBuf.buf = reinterpret_cast<CHAR*>(GetWritePos());
 		wsaBuf.len = writeableSize;
 	}
+#endif
 }

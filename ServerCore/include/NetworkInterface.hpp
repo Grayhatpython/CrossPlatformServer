@@ -29,10 +29,13 @@ namespace servercore
 	public:
 		virtual ~INetworkObject() = default;
 
+	public:
+    	virtual NetworkObjectType GetNetworkObjectType() const = 0;
+
 #if defined(PLATFORM_WINDOWS)
 		virtual HANDLE GetHandle()  = 0;
 #elif defined(PLATFORM_LINUX)
-		virtual int GetHandle() = 0;
+		virtual FileDescriptor GetFileDescriptor() = 0;
 #endif
 
 		virtual void Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode, int32 numOfBytes = 0)  = 0;
