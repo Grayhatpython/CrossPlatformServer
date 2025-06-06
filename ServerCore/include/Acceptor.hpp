@@ -62,10 +62,10 @@ namespace servercore
 	public:
 		virtual NetworkObjectType GetNetworkObjectType() const override { return NetworkObjectType::Acceptor; }
 		virtual FileDescriptor GetFileDescriptor() override { return _listenSocket; } 
-		virtual void Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode, int32 numOfBytes) override;
+		virtual void Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode) override;
 
 	private:
-		void ProcessAccept();
+		void ProcessAccept(LinuxAcceptorEvent* acceptEvent);
 
 	public:
 		void									SetServerCore(std::shared_ptr<ServerCore> serverCore) { _serverCore = serverCore; }

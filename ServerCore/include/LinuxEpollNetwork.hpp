@@ -6,6 +6,7 @@ namespace servercore
 #if defined(PLATFORM_LINUX)
     class Sesssion;
     class Acceptor;
+    class LinuxEpollObject;
     class LinuxNetworkEvent : public INetworkEvent
     {
     public:
@@ -96,11 +97,21 @@ namespace servercore
         std::shared_ptr<Session> GetOwnerSession();
     };
 
+    class LinuxErrorEvent : public LinuxNetworkEvent
+    {
+    public:
+        LinuxErrorEvent()
+            : LinuxNetworkEvent(NetworkEventType::Error)
+        {
+
+        }
+    };
+
     class LinuxEpollObject : public INetworkObject
     {
     public:
 	    virtual FileDescriptor GetFileDescriptor() override;
-        virtual void Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode, int32 numOfBytes = 0) override;
+        virtual void Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode) override;
     };
 
     class LinuxEpollDispatcher : public INetworkDispatcher
@@ -121,8 +132,10 @@ namespace servercore
 		virtual DispatchResult Dispatch(uint32 timeoutMs = TIMEOUT_INFINITE) override;
 		virtual void PostExitSignal() override;
 
+        bool RegisterSend(std::shared_ptr<INetworkObject> networkObject);
+
     public:
-        void UnRegister(std::shared_ptr<INetworkObject> networkObject);
+        bool UnRegister(std::shared_ptr<INetworkObject> networkObject);
 
     public:
         FileDescriptor GetFileDescriptor() { return _epoll; }

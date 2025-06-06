@@ -250,22 +250,34 @@ namespace servercore
 		NetworkUtils::CloseSocket(_listenSocket);
 	}
 
-	void Acceptor::Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode, int32 numOfBytes)
+	void Acceptor::Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode)
 	{
 		if(networkEvent->GetNetworkEventType() == NetworkEventType::Accept)
-			ProcessAccept();
+		{
+			auto session = shared_from_this();
+			networkEvent->SetOwner(session);
+
+			auto acceptEvent = static_cast<LinuxAcceptorEvent*>(networkEvent);
+			ProcessAccept(acceptEvent);
+		}
+		else if(networkEvent->GetNetworkEventType() == NetworkEventType::Error)
+		{
+			
+		}
 		else
-			;	//	???
+		{
+			
+		}
 	}
 
-	void Acceptor:: ProcessAccept()
+	void Acceptor:: ProcessAccept(LinuxAcceptorEvent* acceptEvent)
 	{
 		struct sockaddr_in address;
 		socklen_t addrLen = sizeof(address);
 
 		while(true)
 		{
-			SOCKET clientSocket = ::accept(_listenSocket, (struct sockaddr*)&address, &addrLen);
+			SOCKET clientSocket = ::accept4(_listenSocket, (struct sockaddr*)&address, &addrLen, SOCK_NONBLOCK | SOCK_CLOEXEC);
 			if(clientSocket == INVALID_SOCKET)
 			{
 				//	더 이상 연결 요청 없음
@@ -283,22 +295,30 @@ namespace servercore
 
 			auto newSession = _serverCore->CreateSession();
 			assert(newSession);
-			
-			//	TODO
-			NetworkUtils::SetNonBlocking(clientSocket);
+
+			if(NetworkUtils::SetReuseAddress(clientSocket, true) == false)
+			{
+				//	TODO
+				return;
+			}
 
 			newSession->SetSocket(clientSocket);
 			newSession->SetRemoteAddress(remoteAddress);
 			
 			if (_networkDispatcher->Register(std::static_pointer_cast<INetworkObject>(newSession)) == false)
 			{
+				//	TODO
 				return;
 			}
 
 			_serverCore->AddSession(newSession);
-
-			//	TODO
 			newSession->ProcessConnect();
+		}
+
+		if(acceptEvent)
+		{
+			cdelete(acceptEvent);
+			acceptEvent = nullptr;
 		}
 	}
 #endif

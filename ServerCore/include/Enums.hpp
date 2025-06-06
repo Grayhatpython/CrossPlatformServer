@@ -22,7 +22,7 @@ enum class NetworkObjectType
 
 enum class ErrorCode
 {
-	Success,
+	Success = 10000,
 };
 
 enum class DispatchResult

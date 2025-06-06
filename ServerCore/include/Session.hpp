@@ -111,16 +111,17 @@ namespace servercore
 
 	private:
 		void		ProcessConnect();
-		void		ProcessDisconnect();
-		void		ProcessRecv(int32 numOfBytes);
-		void		ProcessSend(int32 numOfBytes);
+		void		ProcessConnect(LinuxConnectEvent* connectEvent);
+		void		ProcessDisconnect(LinuxDisconnectEvent* disconnectEvent);
+		void		ProcessRecv(LinuxRecvEvent* recvEvent);
+		void		ProcessSend(LinuxSendEvent* sendEvent);
 
 		void 		CloseSocket();
 
 	public:
-		virtual NetworkObjectType GetNetworkObjectType() const override { return NetworkObjectType::Session }
+		virtual NetworkObjectType GetNetworkObjectType() const override { return NetworkObjectType::Session; }
 		virtual FileDescriptor GetFileDescriptor() override { return _socket; } 
-		virtual void Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode, int32 numOfBytes) override;
+		virtual void Dispatch(INetworkEvent* networkEvent, bool succeeded, int32 errorCode) override;
 
 		void CloseSocket();
 	public:

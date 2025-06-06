@@ -134,9 +134,9 @@ namespace servercore
                     socklen_t len = sizeof(error);
                     ::getsockopt(networkObject->GetFileDescriptor(), SOL_SOCKET, SO_ERROR, &error, &len);
 
-                    LinuxNetworkEvent networkErrorEvent(NetworkEventType::None);
+                    LinuxErrorEvent errorEvent;
                     // networkErrorEvent.SetOwner(std::shared_ptr<INetworkObject>(networkObject, [](auto) {}));
-                    // networkObject->Dispatch(&networkErrorEvent, false, error, 0);
+                    networkObject->Dispatch(&errorEvent, false, error);
                 }
                 
                 //  Read event
@@ -144,11 +144,26 @@ namespace servercore
                 {
                     if(networkObjectType == NetworkObjectType::Acceptor)
                     {
-                        //  accept
+                        auto acceptor = static_cast<Acceptor*>(networkObject);
+
+                        if(acceptor)
+                        {
+                            //  acceptor accept
+                            LinuxAcceptorEvent* acceptEvent = cnew<LinuxAcceptorEvent>();
+                            acceptor->Dispatch(acceptEvent, true, static_cast<int32>(ErrorCode::Success));
+                        }
                     }
                     else
                     {
-                        //  session recv
+                        auto session = static_cast<Session*>(networkObject);
+                        
+                        if(session)
+                        {
+                            //  session recv
+                            LinuxRecvEvent* recvEvent = cnew<LinuxRecvEvent>();
+                            session->Dispatch(recvEvent, true, static_cast<int32>(ErrorCode::Success));
+                        }
+
                     }
                 }
 
@@ -159,13 +174,20 @@ namespace servercore
                     {
                         auto session = static_cast<Session*>(networkObject);
                         
-                        if(session->IsConnectPending() == true)
+                        if(session)
                         {
-                            //  connect
-                        }
-                        else
-                        {
-                            //  send
+                            if(session->IsConnectPending() == true)
+                            {
+                                //  connect
+                                LinuxConnectEvent* connectEvent = cnew<LinuxConnectEvent>();
+                                session->Dispatch(connectEvent, true, static_cast<int32>(ErrorCode::Success));
+                            }
+                            else
+                            {
+                                //  send
+                                LinuxSendEvent* sendEvent = cnew<LinuxSendEvent>();
+                                session->Dispatch(sendEvent, true, static_cast<int32>(ErrorCode::Success));
+                            }
                         }
                     }
                     else
@@ -188,6 +210,21 @@ namespace servercore
         ::write(_exitSignalEventPipe[1], buffer, sizeof(buffer));
     }
 
+    bool LinuxEpollDispatcher::RegisterSend(std::shared_ptr<INetworkObject> networkObject)
+    {
+        if(networkObject == nullptr)
+            return false;
+
+        struct epoll_event ev;
+        ev.events = EPOLLIN | EPOLLOUT | EPOLLET;
+        ev.data.ptr = networkObject.get();
+
+        if(::epoll_ctl(_epoll, EPOLL_CTL_MOD, networkObject->GetFileDescriptor(), &ev) < 0)
+            return false;
+
+        return true;
+    }
+
     bool LinuxEpollDispatcher::UnRegister(std::shared_ptr<INetworkObject> networkObject)
     {
         if (::epoll_ctl(_epoll, EPOLL_CTL_DEL, networkObject->GetFileDescriptor(), nullptr) < 0) 
@@ -197,4 +234,3 @@ namespace servercore
     }
 
 #endif
-}
